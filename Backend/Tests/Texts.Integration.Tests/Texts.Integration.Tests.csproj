@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Texts.Api\Texts.Api.csproj" />
+    <ProjectReference Include="..\..\Presentation\Texts.Api\Texts.Api.csproj" />
   </ItemGroup>
 
 </Project>

@@ -19,8 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Texts.Application\Texts.Application.csproj" />
-    <ProjectReference Include="..\Texts.Domain\Texts.Domain.csproj" />
+    <ProjectReference Include="..\..\Core\Texts.Application\Texts.Application.csproj" />
   </ItemGroup>
 
 </Project>

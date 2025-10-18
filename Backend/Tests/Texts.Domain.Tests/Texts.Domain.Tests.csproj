@@ -12,6 +12,6 @@
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Texts.Domain\Texts.Domain.csproj" />
+    <ProjectReference Include="..\..\Core\Texts.Domain\Texts.Domain.csproj" />
   </ItemGroup>
 </Project>
