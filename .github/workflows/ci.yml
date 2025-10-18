@@ -15,6 +15,9 @@ jobs:
   backend:
     name: Backend (.NET)
     runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
     defaults:
       run:
         working-directory: Backend
@@ -32,7 +35,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj','**/*.props','**/*.targets','**/packages.lock.json') }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('Backend/**/*.csproj','Backend/**/*.props','Backend/**/*.targets','Backend/**/packages.lock.json') }}
           restore-keys: |
             nuget-${{ runner.os }}-
 
@@ -42,17 +45,27 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
 
-      - name: Test
+      - name: Test (with coverage)
         run: dotnet test --no-build -c Release --collect:"XPlat Code Coverage" --logger trx
 
-      - name: Publish (self-contained trim disabled)
-        run: dotnet publish -c Release -o ./publish
+      - name: Publish API
+        run: dotnet publish Texts.Api/Texts.Api.csproj -c Release -o ./publish
 
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend_publish
-          path: backend/publish
+          path: Backend/publish
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_results
+          path: |
+            Backend/**/TestResults/*.trx
+            Backend/**/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: ignore
 
   frontend:
     if: ${{ false }}
@@ -69,7 +82,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: Frontend/package-lock.json 
 
       - name: Install
         run: npm ci
@@ -92,6 +105,6 @@ jobs:
         with:
           name: frontend_build
           path: |
-            frontend/dist
-            frontend/build
+            Frontend/dist
+            Frontend/build
           if-no-files-found: ignore
