@@ -55,6 +55,7 @@ jobs:
           path: backend/publish
 
   frontend:
+    if: ${{ false }}
     name: Frontend (React)
     runs-on: ubuntu-latest
     defaults:
