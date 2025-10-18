@@ -18,6 +18,9 @@ jobs:
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
+    defaults:
+      run:
+        working-directory: Backend
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
@@ -37,20 +40,20 @@ jobs:
         run: |
           pwd
           ls -la
-          find . -maxdepth 3 -name "*.sln" -o -name "*.csproj"
+          find . -maxdepth 2 -name "*.sln" -o -name "*.csproj"
       - name: Restore
-        run: dotnet restore ./Backend
+        run: dotnet restore
       - name: Build
-        run: dotnet build ./Backend --no-restore -c Release
+        run: dotnet build --no-restore -c Release
       - name: Test (with coverage)
         run: |
-          dotnet test ./Backend --no-build -c Release \
+          dotnet test --no-build -c Release \
             /p:CollectCoverage=true \
             /p:CoverletOutput=./TestResults/coverage/ \
             /p:CoverletOutputFormat=cobertura \
             --logger "trx;LogFileName=test-results.trx"
       - name: Publish API
-        run: dotnet publish ./Backend/Texts.Api/Texts.Api.csproj -c Release -o ./Backend/publish --no-restore --no-build
+        run: dotnet publish Texts.Api/Texts.Api.csproj -c Release -o ./publish --no-restore --no-build
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
