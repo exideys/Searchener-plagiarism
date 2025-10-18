@@ -46,10 +46,14 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       - name: Test (with coverage)
-        run: dotnet test --no-build -c Release --collect:"XPlat Code Coverage" --logger trx
+        run: |
+          dotnet test --no-build -c Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=./TestResults/coverage/ \
+            /p:CoverletOutputFormat=cobertura
 
       - name: Publish API
-        run: dotnet publish Texts.Api/Texts.Api.csproj -c Release -o ./publish
+        run: dotnet publish Texts.Api/Texts.Api.csproj -c Release -o ./publish --no-restore --no-build
 
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
@@ -64,9 +68,9 @@ jobs:
           name: test_results
           path: |
             Backend/**/TestResults/*.trx
-            Backend/**/TestResults/**/coverage.cobertura.xml
+            Backend/**/TestResults/coverage/coverage.cobertura.xml
           if-no-files-found: ignore
-
+  
   frontend:
     if: ${{ false }}
     name: Frontend (React)
