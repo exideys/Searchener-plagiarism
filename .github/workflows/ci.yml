@@ -2,9 +2,9 @@ name: CI (Backend + Frontend)
 
 on:
   push:
-    branches: [ "*" ]
+    branches: ["*"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -18,19 +18,14 @@ jobs:
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
-    defaults:
-      run:
-        working-directory: Backend
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             8.0.x
             9.0.x
-
       - name: Cache NuGet
         uses: actions/cache@v4
         with:
@@ -38,29 +33,29 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('Backend/**/*.csproj','Backend/**/*.props','Backend/**/*.targets','Backend/**/packages.lock.json') }}
           restore-keys: |
             nuget-${{ runner.os }}-
-
+      - name: Debug paths
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 3 -name "*.sln" -o -name "*.csproj"
       - name: Restore
-        run: dotnet restore
-
+        run: dotnet restore ./Backend
       - name: Build
-        run: dotnet build --no-restore -c Release
-
+        run: dotnet build ./Backend --no-restore -c Release
       - name: Test (with coverage)
         run: |
-          dotnet test --no-build -c Release \
+          dotnet test ./Backend --no-build -c Release \
             /p:CollectCoverage=true \
             /p:CoverletOutput=./TestResults/coverage/ \
-            /p:CoverletOutputFormat=cobertura
-
+            /p:CoverletOutputFormat=cobertura \
+            --logger "trx;LogFileName=test-results.trx"
       - name: Publish API
-        run: dotnet publish Texts.Api/Texts.Api.csproj -c Release -o ./publish --no-restore --no-build
-
+        run: dotnet publish ./Backend/Texts.Api/Texts.Api.csproj -c Release -o ./Backend/publish --no-restore --no-build
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend_publish
           path: Backend/publish
-
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,39 +65,34 @@ jobs:
             Backend/**/TestResults/*.trx
             Backend/**/TestResults/coverage/coverage.cobertura.xml
           if-no-files-found: ignore
-  
+
   frontend:
     if: ${{ false }}
     name: Frontend (React)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Frontend
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: Frontend/package-lock.json 
-
+          cache-dependency-path: Frontend/package-lock.json
       - name: Install
+        working-directory: Frontend
         run: npm ci
-
       - name: Lint
+        working-directory: Frontend
         run: |
           if npm run | grep -q "^  lint$"; then npm run lint; else echo "no lint script"; fi
-
       - name: Test
+        working-directory: Frontend
         run: |
           if npm run | grep -q "^  test$"; then npm test -- --ci --watchAll=false; else echo "no test script"; fi
-
       - name: Build
+        working-directory: Frontend
         run: |
           if npm run | grep -q "^  build$"; then npm run build; else echo "no build script"; fi
-
       - name: Upload frontend artifact
         if: always()
         uses: actions/upload-artifact@v4
