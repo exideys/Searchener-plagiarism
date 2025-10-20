@@ -51,7 +51,7 @@ async function analyzeText(text: string, signal?: AbortSignal): Promise<AnalyzeR
 async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAnalyzeItem[]> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
   const fd = new FormData();
-  for (const f of files) fd.append("files", f, f.name);
+  for (const f of files) fd.append("file", f, f.name);
 
   const res = await fetch(`${API_URL.replace(/\/$/, "")}${FILE_ENDPOINT}`, {
     method: "POST",

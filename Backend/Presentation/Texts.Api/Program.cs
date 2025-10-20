@@ -38,11 +38,16 @@ app.MapPost("/text/analyze", (AnalyzeTextRequest req, ITextService svc) =>
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.Run();
-app.MapPost("/file/analyze", async (IFormFile file, IAnalyzeFileService svc)  =>
+
+app.MapPost("/file/analyze", async (HttpRequest request, IAnalyzeFileService svc)  =>
 {
     try
     {
+        if (!request.HasFormContentType)
+            return Results.BadRequest(new { error = "Invalid content type" });
+
+        var form = await request.ReadFormAsync();
+        var file = form.Files.FirstOrDefault();
         using var stream = file.OpenReadStream();
         var s = await svc.Execute(file.OpenReadStream(), file.FileName);
             
@@ -65,4 +70,5 @@ app.MapPost("/file/analyze", async (IFormFile file, IAnalyzeFileService svc)  =>
 .Produces(StatusCodes.Status500InternalServerError)
 .DisableAntiforgery();
 
+app.Run();
 public partial class Program { }
