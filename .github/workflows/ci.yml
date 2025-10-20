@@ -127,12 +127,9 @@ jobs:
           CI: "true"
         run: |
           if npm run | grep -q "^  test$"; then
-            # сначала пробуем локальный скрипт (локальный vitest)
             npm run test -- --coverage --run || \
-            # фоллбэк: если vitest не установлен как devDep (нет в lockfile), возьмем через npx
             npx --yes vitest run --coverage
           else
-            # если нет скрипта test — попробуем напрямую npx
             npx --yes vitest run --coverage || echo "no vitest, skipping tests"
           fi
 
