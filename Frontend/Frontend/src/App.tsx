@@ -27,7 +27,7 @@ type FilesResponseVariant = { items: FileAnalyzeItem[] } | FileAnalyzeItem[] | A
 
 type Row = { word: string; count: number; freq: number };
 
-const API_URL = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const API_URL = import.meta.env?.VITE_API_URL as string | undefined;
 
 // endpoints (adjust if you use different routes)
 const TEXT_ENDPOINT = "/text/analyze";
@@ -60,11 +60,31 @@ async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAn
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text().catch(() => res.statusText)}`);
 
-  const data = (await res.json()) as FilesResponseVariant;
+  const data: unknown = await res.json()
 
-  if (Array.isArray(data)) return data.map((x) => ({ ...x }));
-  if ("items" in (data as any)) return (data as any).items;
-  return [{ ...(data as AnalyzeResponse) }];
+  function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
+    if (typeof x !== 'object' || x === null) return false
+    const r = x as Record<string, unknown>
+    return typeof r.total === 'number'
+        && typeof r.counts === 'object' && r.counts !== null
+        && typeof r.frequencies === 'object' && r.frequencies !== null
+  }
+
+  function isFileAnalyzeArray(x: unknown): x is FileAnalyzeItem[] {
+    return Array.isArray(x) && x.every(isAnalyzeResponse)
+  }
+
+  function hasItemsArray(x: unknown): x is { items: FileAnalyzeItem[] } {
+    if (typeof x !== 'object' || x === null) return false
+    const r = x as Record<string, unknown>
+    return Array.isArray(r.items) && r.items.every(isAnalyzeResponse)
+  }
+
+  if (isFileAnalyzeArray(data)) return data
+  if (hasItemsArray(data)) return data.items
+  if (isAnalyzeResponse(data)) return [data]
+  throw new Error('Unexpected API response shape')
+
 }
 
 /* ======================== UI bits ======================== */
@@ -259,11 +279,12 @@ export default function App() {
       const ctrl = new AbortController();
       const resp = await analyzeText(value, ctrl.signal);
       setTextResult(resp);
-    } catch (e: any) {
-      setErr(e?.message || "API error");
-      setTextResult(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setErr(msg || "API error")
+      setTextResult(null)
     } finally {
-      setLoading(null);
+      setLoading(null)
     }
   };
 
@@ -285,11 +306,12 @@ export default function App() {
       }));
       setFileResults(itemsWithNames);
       setActiveFileTab(0);
-    } catch (e: any) {
-      setErr(e?.message || "API error");
-      setFileResults(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setErr(msg || "API error")
+      setFileResults(null)
     } finally {
-      setLoading(null);
+      setLoading(null)
     }
   };
 
