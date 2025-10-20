@@ -5,6 +5,7 @@ using Texts.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
+builder.Services.AddScoped<IAnalyzeFileService, AnalyzeFileService>();
 builder.Services.AddInfrastructure();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -34,8 +35,34 @@ app.MapPost("/text/analyze", (AnalyzeTextRequest req, ITextService svc) =>
     .Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest);
 
+
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
+app.MapPost("/file/analyze", async (IFormFile file, IAnalyzeFileService svc)  =>
+{
+    try
+    {
+        using var stream = file.OpenReadStream();
+        var s = await svc.Execute(file.OpenReadStream(), file.FileName);
+            
+        var counts = s.Counts.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value);
+        var freqs  = s.Frequencies.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value);
+            
+        return Results.Ok(new AnalyzeTextResponse(s.Total, counts, freqs));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("An error occurred while processing the file");
+    }
+}).WithName("UploadAndAnalyzeText")
+.Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest)
+.Produces(StatusCodes.Status500InternalServerError)
+.DisableAntiforgery();
 
 public partial class Program { }
