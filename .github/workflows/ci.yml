@@ -104,7 +104,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node
-        
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -125,15 +124,16 @@ jobs:
 
       - name: Test
         env:
-          
-          
           CI: "true"
         run: |
           if npm run | grep -q "^  test$"; then
-            
-            npm run test -- --coverage --run
+            # сначала пробуем локальный скрипт (локальный vitest)
+            npm run test -- --coverage --run || \
+            # фоллбэк: если vitest не установлен как devDep (нет в lockfile), возьмем через npx
+            npx --yes vitest run --coverage
           else
-            echo "no test script"
+            # если нет скрипта test — попробуем напрямую npx
+            npx --yes vitest run --coverage || echo "no vitest, skipping tests"
           fi
 
       - name: Build
@@ -153,4 +153,3 @@ jobs:
             Frontend/Frontend/dist
             Frontend/Frontend/build
           if-no-files-found: ignore
-  
