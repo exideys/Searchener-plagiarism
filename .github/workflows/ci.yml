@@ -2,9 +2,9 @@ name: CI (Backend + Frontend)
 
 on:
   push:
-    branches: [ "*" ]
+    branches: ["*"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -15,9 +15,9 @@ jobs:
   backend:
     name: Backend (.NET)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Backend
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -32,66 +32,99 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj','**/*.props','**/*.targets','**/packages.lock.json') }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('Backend/**/*.csproj','Backend/**/*.props','Backend/**/*.targets','Backend/**/packages.lock.json','**/Texts.Api.csproj') }}
           restore-keys: |
             nuget-${{ runner.os }}-
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ./Backend
 
       - name: Build
-        run: dotnet build --no-restore -c Release
+        run: dotnet build ./Backend --no-restore -c Release
 
-      - name: Test
-        run: dotnet test --no-build -c Release --collect:"XPlat Code Coverage" --logger trx
+      - name: Test (with coverage)
+        run: |
+          dotnet test ./Backend --no-build -c Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=./TestResults/coverage/ \
+            /p:CoverletOutputFormat=cobertura \
+            --logger "trx;LogFileName=test-results.trx"
 
-      - name: Publish (self-contained trim disabled)
-        run: dotnet publish -c Release -o ./publish
+      - name: Resolve API project path
+        id: resolve_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          CAND=""
+          if [[ -f "./Backend/Texts.Api/Texts.Api.csproj" ]]; then
+            CAND="./Backend/Texts.Api/Texts.Api.csproj"
+          elif [[ -f "./Texts.Api/Texts.Api.csproj" ]]; then
+            CAND="./Texts.Api/Texts.Api.csproj"
+          else
+            CAND="$(find . -maxdepth 4 -type f -name 'Texts.Api.csproj' | head -n1 || true)"
+          fi
+          if [[ -z "${CAND}" ]]; then
+            echo "Texts.Api.csproj not found"
+            exit 1
+          fi
+          echo "api_csproj=${CAND}" >> "$GITHUB_OUTPUT"
+          echo "Resolved API project: ${CAND}"
+
+      - name: Publish API
+        run: |
+          OUT_DIR="${{ github.workspace }}/Backend/publish"
+          dotnet publish "${{ steps.resolve_api.outputs.api_csproj }}" -c Release -o "${OUT_DIR}" --no-restore --no-build
+          ls -la "${OUT_DIR}"
 
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend_publish
-          path: backend/publish
+          path: Backend/publish
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_results
+          path: |
+            Backend/**/TestResults/*.trx
+            Backend/**/TestResults/coverage/coverage.cobertura.xml
+          if-no-files-found: ignore
 
   frontend:
     if: ${{ false }}
     name: Frontend (React)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Frontend
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
+          cache-dependency-path: Frontend/package-lock.json
       - name: Install
+        working-directory: Frontend
         run: npm ci
-
       - name: Lint
+        working-directory: Frontend
         run: |
           if npm run | grep -q "^  lint$"; then npm run lint; else echo "no lint script"; fi
-
       - name: Test
+        working-directory: Frontend
         run: |
           if npm run | grep -q "^  test$"; then npm test -- --ci --watchAll=false; else echo "no test script"; fi
-
       - name: Build
+        working-directory: Frontend
         run: |
           if npm run | grep -q "^  build$"; then npm run build; else echo "no build script"; fi
-
       - name: Upload frontend artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend_build
           path: |
-            frontend/dist
-            frontend/build
+            Frontend/dist
+            Frontend/build
           if-no-files-found: ignore
