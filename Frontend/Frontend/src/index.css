@@ -1,0 +1,7 @@
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: #f9fafb;   /* светлый фон */
+  color: #111827;        /* тёмный текст */
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
