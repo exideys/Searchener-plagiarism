@@ -11,7 +11,7 @@ public static class TextAnalyzer
 {
     public static TextStats Analyze(string? text)
     {
-        var words = text?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
+        var words = text?.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
         var dict = new Dictionary<string,int>();
         if (!string.IsNullOrEmpty(text))
             foreach (var ch in words)

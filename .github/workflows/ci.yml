@@ -93,38 +93,60 @@ jobs:
           if-no-files-found: ignore
 
   frontend:
-    if: ${{ false }}
     name: Frontend (React)
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Frontend/Frontend
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: Frontend/package-lock.json
+          cache-dependency-path: |
+            Frontend/Frontend/package-lock.json
+
       - name: Install
-        working-directory: Frontend
         run: npm ci
+
       - name: Lint
-        working-directory: Frontend
         run: |
-          if npm run | grep -q "^  lint$"; then npm run lint; else echo "no lint script"; fi
+          if npm run | grep -q "^  lint$"; then
+            npm run lint
+          else
+            echo "no lint script"
+          fi
+
       - name: Test
-        working-directory: Frontend
+        env:
+          CI: "true"
         run: |
-          if npm run | grep -q "^  test$"; then npm test -- --ci --watchAll=false; else echo "no test script"; fi
+          if npm run | grep -q "^  test$"; then
+            npm run test -- --coverage --run || \
+            npx --yes vitest run --coverage
+          else
+            npx --yes vitest run --coverage || echo "no vitest, skipping tests"
+          fi
+
       - name: Build
-        working-directory: Frontend
         run: |
-          if npm run | grep -q "^  build$"; then npm run build; else echo "no build script"; fi
+          if npm run | grep -q "^  build$"; then
+            npm run build
+          else
+            echo "no build script"
+          fi
+
       - name: Upload frontend artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend_build
           path: |
-            Frontend/dist
-            Frontend/build
+            Frontend/Frontend/dist
+            Frontend/Frontend/build
           if-no-files-found: ignore

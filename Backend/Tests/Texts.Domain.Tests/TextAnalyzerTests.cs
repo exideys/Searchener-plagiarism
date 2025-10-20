@@ -45,4 +45,13 @@ public class TextAnalyzerTests
         Assert.True(s.Frequencies.TryGetValue("x", out var fx) && fx > 0.66 && fx < 0.67);
         Assert.True(s.Frequencies.TryGetValue("y", out var fy) && fy > 0.33 && fy < 0.34);
     }
+
+    [Fact]
+    public void CaseInsensitive_CountsTogether()
+    {
+        var s = TextAnalyzer.Analyze("Hello hELLo HELLO world WORLD");
+        Assert.Equal(5, s.Total);
+        Assert.Equal(3, s.Counts["hello"]);
+        Assert.Equal(2, s.Counts["world"]);
+    }
 }
