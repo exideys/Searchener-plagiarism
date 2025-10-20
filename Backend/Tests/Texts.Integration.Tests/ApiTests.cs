@@ -1,8 +1,8 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
-
 
 public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 {
@@ -10,14 +10,22 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     public ApiTests(WebApplicationFactory<Program> f) => _c = f.CreateClient();
 
     [Fact]
-    public async Task Analyze_Returns200_AndPayload()
+    public async Task Analyze_Returns200_AndPayload_WordCounting()
     {
-        var r = await _c.PostAsJsonAsync("/text/analyze", new { text = "hello" });
+        var r = await _c.PostAsJsonAsync("/text/analyze", new { text = "aa bb aa" });
         r.EnsureSuccessStatusCode();
+
         var dto = await r.Content.ReadFromJsonAsync<ResponseDto>();
         Assert.NotNull(dto);
-        Assert.True(dto!.Total >= 1);
-        Assert.True(dto.Counts.ContainsKey("h"));
+
+        Assert.Equal(3, dto!.Total);
+        Assert.True(dto.Counts.ContainsKey("aa"));
+        Assert.True(dto.Counts.ContainsKey("bb"));
+        Assert.Equal(2, dto.Counts["aa"]);
+        Assert.Equal(1, dto.Counts["bb"]);
+
+        var sum = dto.Frequencies.Values.Sum();
+        Assert.InRange(sum, 0.999, 1.001);
     }
 
     [Fact]
