@@ -3,17 +3,18 @@ namespace Texts.Domain;
 public sealed class TextStats
 {
     public int Total { get; init; }
-    public IReadOnlyDictionary<char,int> Counts { get; init; } = new Dictionary<char,int>();
-    public IReadOnlyDictionary<char,double> Frequencies { get; init; } = new Dictionary<char,double>();
+    public IReadOnlyDictionary<string,int> Counts { get; init; } = new Dictionary<string,int>();
+    public IReadOnlyDictionary<string,double> Frequencies { get; init; } = new Dictionary<string,double>();
 }
 
 public static class TextAnalyzer
 {
     public static TextStats Analyze(string? text)
     {
-        var dict = new Dictionary<char,int>();
+        var words = text?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
+        var dict = new Dictionary<string,int>();
         if (!string.IsNullOrEmpty(text))
-            foreach (var ch in text.Replace(" ", ""))
+            foreach (var ch in words)
                 dict[ch] = dict.TryGetValue(ch, out var n) ? n + 1 : 1;
 
         var total = dict.Values.Sum();
