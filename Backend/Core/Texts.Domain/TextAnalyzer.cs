@@ -11,7 +11,10 @@ public static class TextAnalyzer
 {
     public static TextStats Analyze(string? text)
     {
-        var words = text?.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        var words = new string((text ?? "")
+                .Select(c => char.IsPunctuation(c) && c != '#' && c != '@' ? ' ' : char.ToLowerInvariant(c))
+                .ToArray())
+            .Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
         var dict = new Dictionary<string,int>();
         if (!string.IsNullOrEmpty(text))
             foreach (var ch in words)

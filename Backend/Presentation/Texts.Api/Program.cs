@@ -45,7 +45,6 @@ app.MapPost("/file/analyze", async (HttpRequest request, IAnalyzeFileService svc
     {
         if (!request.HasFormContentType)
             return Results.BadRequest(new { error = "Invalid content type" });
-
         var form = await request.ReadFormAsync();
         var file = form.Files.FirstOrDefault();
         using var stream = file.OpenReadStream();

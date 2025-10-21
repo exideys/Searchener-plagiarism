@@ -54,4 +54,60 @@ public class TextAnalyzerTests
         Assert.Equal(3, s.Counts["hello"]);
         Assert.Equal(2, s.Counts["world"]);
     }
+    
+    [Fact]
+    public void Punctuation_IsRemoved_AndDoesNotGlueWords()
+    {
+        var s = TextAnalyzer.Analyze("hello,world! foo...bar");
+        Assert.Equal(4, s.Total);
+        Assert.Equal(1, s.Counts["hello"]);
+        Assert.Equal(1, s.Counts["world"]);
+        Assert.Equal(1, s.Counts["foo"]);
+        Assert.Equal(1, s.Counts["bar"]);
+    }
+
+    [Fact]
+    public void Symbols_ArePreserved_InsideWords()
+    {
+        var s = TextAnalyzer.Analyze("c# c++ usd$ price#tag");
+        Assert.Equal(4, s.Total);
+        Assert.Equal(1, s.Counts["c#"]);
+        Assert.Equal(1, s.Counts["c++"]);
+        Assert.Equal(1, s.Counts["usd$"]);
+        Assert.Equal(1, s.Counts["price#tag"]);
+    }
+
+    [Theory]
+    [InlineData("hello—world", "hello", "world")]
+    [InlineData("cat,dog", "cat", "dog")]
+    [InlineData("foo—bar", "foo", "bar")]
+    public void UnicodePunctuation_SplitsEnglishWords(string text, string w1, string w2)
+    {
+        var s = TextAnalyzer.Analyze(text);
+        Assert.Equal(2, s.Total);
+        Assert.Equal(1, s.Counts[w1]);
+        Assert.Equal(1, s.Counts[w2]);
+    }
+
+    [Fact]
+    public void MixedWhitespace_TabsAndNewlines_SplitCorrectly()
+    {
+        var s = TextAnalyzer.Analyze("a\t\tb \n c\r\nd");
+        Assert.Equal(4, s.Total);
+        Assert.Equal(1, s.Counts["a"]);
+        Assert.Equal(1, s.Counts["b"]);
+        Assert.Equal(1, s.Counts["c"]);
+        Assert.Equal(1, s.Counts["d"]);
+    }
+
+    [Fact]
+    public void Punctuation_MultipleMarks_TreatedAsSingleSeparator()
+    {
+        var s = TextAnalyzer.Analyze("one---two!!!three??");
+        Assert.Equal(3, s.Total);
+        Assert.Equal(1, s.Counts["one"]);
+        Assert.Equal(1, s.Counts["two"]);
+        Assert.Equal(1, s.Counts["three"]);
+    }
+
 }
