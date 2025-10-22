@@ -48,4 +48,51 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         public Dictionary<string,int> Counts { get; set; } = new();
         public Dictionary<string,double> Frequencies { get; set; } = new();
     }
+    
+    [Fact]
+    public async Task FileAnalyze_TooLarge_Returns413()
+    {
+        using var content = new MultipartFormDataContent();
+        var big = new byte[10 * 1024 * 1024 + 1];
+        content.Add(new ByteArrayContent(big), "file", "big.txt");
+
+        var r = await _c.PostAsync("/file/analyze", content);
+        Assert.Equal((HttpStatusCode)413, r.StatusCode);
+    }
+    
+    [Fact]
+    public async Task FileAnalyze_BadExtension_Returns400()
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("hello")), "file", "data.bin");
+
+        var r = await _c.PostAsync("/file/analyze", content);
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+    }
+    
+    [Fact]
+    public async Task FileAnalyze_Ok_Returns200_AndPayload()
+    {
+        using var form = new MultipartFormDataContent();
+        var bytes = System.Text.Encoding.UTF8.GetBytes("a b a");
+        form.Add(new ByteArrayContent(bytes), "file", "note.txt");
+
+        var r = await _c.PostAsync("/file/analyze", form);
+        r.EnsureSuccessStatusCode();
+
+        var dto = await r.Content.ReadFromJsonAsync<ResponseDto>();
+        Assert.NotNull(dto);
+        Assert.Equal(3, dto!.Total);
+        Assert.Equal(2, dto.Counts["a"]);
+        Assert.Equal(1, dto.Counts["b"]);
+    }
+    
+    [Fact]
+    public async Task FileAnalyze_WrongContentType_Returns400()
+    {
+        var bytes = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("hello"));
+        var r = await _c.PostAsync("/file/analyze", bytes);
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+    }
+
 }

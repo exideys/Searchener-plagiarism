@@ -47,17 +47,6 @@ public sealed class AnalyzeFileServiceTests
     }
 
     [Fact]
-    public async Task Execute_TooLarge_Throws()
-    {
-        var fake = new FakeTextService(new TextStats());
-        var svc = CreateService(fake);
-        var size = 10 * 1024 * 1024 + 1;
-        await using var big = new MemoryStream(new byte[size]);
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.Execute(big, "file.txt"));
-        Assert.Contains("File size exceeds", ex.Message);
-    }
-
-    [Fact]
     public async Task Execute_WhitespaceOnlyContent_Throws()
     {
         var fake = new FakeTextService(new TextStats());
@@ -85,5 +74,23 @@ public sealed class AnalyzeFileServiceTests
 
         Assert.Same(expected, result);
         Assert.Equal(content, fake.LastText);
+    }
+    
+    private sealed class NonSeekableStream : MemoryStream
+    {
+        public NonSeekableStream(byte[] buffer) : base(buffer, writable: false) { }
+        public override bool CanSeek => false;
+        public override long Length => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task Execute_NonSeekableStream_Works()
+    {
+        var fake = new FakeTextService(new TextStats());
+        var svc = new AnalyzeFileService(fake);
+
+        await using var ns = new NonSeekableStream(System.Text.Encoding.UTF8.GetBytes("ok"));
+        var result = await svc.Execute(ns, "file.txt");
+        Assert.NotNull(result);
     }
 }
