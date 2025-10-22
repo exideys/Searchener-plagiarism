@@ -1,20 +1,5 @@
-// App.tsx — Text + Files upload; backend calculates everything
 import React, { useMemo, useState } from "react";
 
-/** Backend contract:
- * Text:
- *   POST {VITE_API_URL}/text/analyze
- *   Body: { text: string }
- *   Resp: { total: number; counts: Record<string, number>; frequencies: Record<string, number> }
- *
- * Files:
- *   POST {VITE_API_URL}/text/file/analyze  (если у тебя другой роут — поправь FILE_ENDPOINT ниже)
- *   Body: multipart/form-data (field name: file) — один или несколько (append по одному)
- *   Resp варианты, которые поддерживает этот UI:
- *     A) { items: Array<{ fileName?: string } & AnalyzeResponse> }
- *     B) Array<{ fileName?: string } & AnalyzeResponse>
- *     C) Single AnalyzeResponse (для одного файла) — fileName может отсутствовать
- */
 
 type AnalyzeResponse = {
   total: number;
@@ -27,9 +12,9 @@ type Row = { word: string; count: number; freq: number };
 
 const API_URL = import.meta.env?.VITE_API_URL as string | undefined;
 
-// endpoints (adjust if you use different routes)
+
 const TEXT_ENDPOINT = "/text/analyze";
-const FILE_ENDPOINT = "/file/analyze"; // если BE ждёт /text/file/analyze — поменяй на "/text/file/analyze"
+const FILE_ENDPOINT = "/file/analyze"; 
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
@@ -62,7 +47,7 @@ async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAn
     throw new Error(`API ${res.status}: ${msg}`);
   }
 
-  // --- типобезопасный парсинг ответа ---
+  
   const data: unknown = await res.json();
 
   function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
@@ -230,7 +215,7 @@ function FileDrop({
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length) onFilesSelected(files);
-    e.currentTarget.value = ""; // allow re-selecting same file
+    e.currentTarget.value = ""; 
   };
 
   const onDrop = (e: React.DragEvent<HTMLLabelElement>) => {
@@ -308,7 +293,7 @@ export default function App() {
       const ctrl = new AbortController();
       const items = await analyzeFiles(pendingFiles, ctrl.signal);
 
-      // если бэкенд не вернул имя, подставим локальное
+      
       const itemsWithNames = items.map((it, i) => ({
         fileName: it.fileName || pendingFiles[i]?.name || `File ${i + 1}`,
         total: it.total,

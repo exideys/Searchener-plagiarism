@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Mvc;
 using Texts.Application;
 using Texts.Contracts;
 using Texts.Infrastructure;
+
+const long maxFileSize = 10 * 1024 * 1024;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,13 +47,23 @@ app.MapPost("/file/analyze", async (HttpRequest request, IAnalyzeFileService svc
     try
     {
         if (!request.HasFormContentType)
-            return Results.BadRequest(new { error = "Invalid content type" });
+            return Results.BadRequest(new { error = "Invalid content type. Use multipart/form-data." });
 
         var form = await request.ReadFormAsync();
         var file = form.Files.FirstOrDefault();
-        using var stream = file.OpenReadStream();
-        var s = await svc.Execute(file.OpenReadStream(), file.FileName);
-            
+        
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { error = "File is required" });
+        
+        if (file.Length > maxFileSize)
+            return Results.Problem(
+                title: "Payload Too Large",
+                detail: $"File size exceeds {maxFileSize / (1024 * 1024)} MB",
+                statusCode: StatusCodes.Status413PayloadTooLarge);
+        
+        await using var stream = file.OpenReadStream();
+        
+        var s = await svc.Execute(stream, file.FileName);
         var counts = s.Counts.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value);
         var freqs  = s.Frequencies.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value);
             
@@ -60,14 +73,13 @@ app.MapPost("/file/analyze", async (HttpRequest request, IAnalyzeFileService svc
     {
         return Results.BadRequest(new { error = ex.Message });
     }
-    catch (Exception ex)
-    {
-        return Results.Problem("An error occurred while processing the file");
-    }
+    catch { return Results.Problem("An error occurred while processing the file"); }
 }).WithName("UploadAndAnalyzeText")
+.WithMetadata(new ConsumesAttribute("multipart/form-data"))
 .Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
 .Produces(StatusCodes.Status400BadRequest)
 .Produces(StatusCodes.Status500InternalServerError)
+.Produces(StatusCodes.Status413RequestEntityTooLarge)
 .DisableAntiforgery();
 
 app.Run();
