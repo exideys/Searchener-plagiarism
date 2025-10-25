@@ -33,7 +33,7 @@ function mockFetchErrorOnce(status: number, text: string) {
 
 test('renders main UI blocks', () => {
     render(<App />)
-    expect(screen.getByText(/Text Analysis: Unique Words/i)).toBeInTheDocument()
+    expect(screen.getByText(/Searchener-plagiarism/i)).toBeInTheDocument()
     expect(screen.getByText(/Paste text to analyze/i)).toBeInTheDocument()
     expect(screen.getByText(/Analyze files/i)).toBeInTheDocument()
 })
@@ -175,7 +175,7 @@ test('table sorting inside App: click Word header toggles order', async () => {
     expect(cells1[0]).toHaveTextContent(/^b$/i)
     expect(cells1[1]).toHaveTextContent(/^1$/)
 
-    // 1-й клик по Word: sortKey='word', dir='desc' -> b, a
+
     await userEvent.click(screen.getByRole('button', { name: /^Word/ }))
     rows = getRows()
     cells0 = within(rows[0]).getAllByRole('cell')
