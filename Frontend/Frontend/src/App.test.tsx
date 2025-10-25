@@ -4,7 +4,7 @@ import { beforeEach, afterEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
-// Подменяем import.meta.env без any
+
 beforeEach(() => {
     Object.defineProperty(import.meta, 'env', {
         value: { VITE_API_URL: 'http://localhost:8081' },
@@ -16,7 +16,7 @@ afterEach(() => {
     vi.restoreAllMocks()
 })
 
-/** Утилита для мока fetch без any */
+
 function mockFetchOnce(body: unknown, init?: { status?: number }) {
     const status = init?.status ?? 200
     const res = new Response(JSON.stringify(body), {
@@ -27,14 +27,13 @@ function mockFetchOnce(body: unknown, init?: { status?: number }) {
 }
 
 function mockFetchErrorOnce(status: number, text: string) {
-    // имитируем ошибочный ответ, который парсится как text()
     const res = new Response(text, { status, headers: { 'Content-Type': 'text/plain' } })
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(res)
 }
 
 test('renders main UI blocks', () => {
     render(<App />)
-    expect(screen.getByText(/Text Analysis: Unique Words/i)).toBeInTheDocument()
+    expect(screen.getByText(/Searchener-plagiarism/i)).toBeInTheDocument()
     expect(screen.getByText(/Paste text to analyze/i)).toBeInTheDocument()
     expect(screen.getByText(/Analyze files/i)).toBeInTheDocument()
 })
@@ -168,7 +167,6 @@ test('table sorting inside App: click Word header toggles order', async () => {
         screen.getAllByRole('row')
             .filter(r => within(r).queryAllByRole('cell').length > 0)
 
-    // по умолчанию: Count desc -> a(2), b(1)
     let rows = getRows()
     let cells0 = within(rows[0]).getAllByRole('cell')
     let cells1 = within(rows[1]).getAllByRole('cell')
@@ -177,7 +175,7 @@ test('table sorting inside App: click Word header toggles order', async () => {
     expect(cells1[0]).toHaveTextContent(/^b$/i)
     expect(cells1[1]).toHaveTextContent(/^1$/)
 
-    // 1-й клик по Word: sortKey='word', dir='desc' -> b, a
+
     await userEvent.click(screen.getByRole('button', { name: /^Word/ }))
     rows = getRows()
     cells0 = within(rows[0]).getAllByRole('cell')
@@ -185,7 +183,6 @@ test('table sorting inside App: click Word header toggles order', async () => {
     expect(cells0[0]).toHaveTextContent(/^b$/i)
     expect(cells1[0]).toHaveTextContent(/^a$/i)
 
-    // 2-й клик по Word: dir='asc' -> a, b
     await userEvent.click(screen.getByRole('button', { name: /^Word/ }))
     rows = getRows()
     cells0 = within(rows[0]).getAllByRole('cell')

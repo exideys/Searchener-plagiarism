@@ -18,7 +18,6 @@ const FILE_ENDPOINT = "/file/analyze";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
-/* ======================== API calls ======================== */
 async function analyzeText(text: string, signal?: AbortSignal): Promise<AnalyzeResponse> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
   const res = await fetch(`${API_URL.replace(/\/$/, "")}${TEXT_ENDPOINT}`, {
@@ -79,7 +78,6 @@ async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAn
   throw new Error("Unexpected API response shape");
 }
 
-/* ======================== UI bits ======================== */
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
       <div className="px-3 py-1 rounded-2xl bg-gray-100 border text-gray-800 text-xs font-medium">
@@ -252,7 +250,6 @@ function FileDrop({
   );
 }
 
-/* ======================== App ======================== */
 export default function App() {
   const [text, setText] = useState("");
 
@@ -317,7 +314,7 @@ export default function App() {
           <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-indigo-600" />
-              <h1 className="text-lg font-bold">Text Analysis: Unique Words</h1>
+              <h1 className="text-lg font-bold">Searchener-plagiarism</h1>
             </div>
             <div className="text-xs text-gray-500">API: {API_URL || "not set"}</div>
           </div>
@@ -387,7 +384,7 @@ export default function App() {
             )}
           </div>
 
-          {/* LOADING / ERROR */}
+        
           {loading === "text" && <Loader label="Analyzing text…" />}
           {loading === "files" && <Loader label="Analyzing files…" />}
 
@@ -395,12 +392,11 @@ export default function App() {
               <div className="p-4 rounded-xl border bg-red-50 text-red-700 text-sm">API: {err}</div>
           )}
 
-          {/* RESULTS */}
+          
           {!loading && textResult && <ResultsTable data={textResult} />}
 
           {!loading && fileResults && !!fileResults.length && (
               <div className="grid gap-3">
-                {/* Tabs */}
                 <div className="flex flex-wrap gap-2">
                   {fileResults.map((it, i) => (
                       <button
@@ -417,7 +413,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Active file result */}
                 <ResultsTable
                     data={fileResults[activeFileTab]}
                     title={`Results — ${
