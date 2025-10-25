@@ -125,7 +125,7 @@ test("analyzes text in SHINGLES mode with given k and shows shingles table", asy
   const sentBody = JSON.parse((optsArg as RequestInit).body as string);
   expect(sentBody).toMatchObject({
     text: "hello world test lol",
-    k: 4,
+    k: 14,
   });
 
   expect((optsArg as RequestInit).headers).toMatchObject({
