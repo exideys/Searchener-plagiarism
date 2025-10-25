@@ -1,10 +1,13 @@
 import React, { useMemo, useState } from "react";
 
-
 type AnalyzeResponse = {
   total: number;
   counts: Record<string, number>;
   frequencies: Record<string, number>;
+};
+
+type ShinglesResponse = {
+  shingles: string[];
 };
 
 type FileAnalyzeItem = AnalyzeResponse & { fileName?: string };
@@ -12,53 +15,92 @@ type Row = { word: string; count: number; freq: number };
 
 const API_URL = import.meta.env?.VITE_API_URL as string | undefined;
 
+const TEXT_ENDPOINT_WORDS = "/text/analyze";
+const TEXT_ENDPOINT_SHINGLES = "/text/shingles";
 
-const TEXT_ENDPOINT = "/text/analyze";
-const FILE_ENDPOINT = "/file/analyze"; 
+const FILE_ENDPOINT_WORDS = "/file/analyze";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
-/* ======================== API calls ======================== */
-async function analyzeText(text: string, signal?: AbortSignal): Promise<AnalyzeResponse> {
+
+// анализ текста (слова ИЛИ шинглы)
+async function analyzeText(
+  text: string,
+  mode: "words" | "shingles",
+  k: number,
+  signal?: AbortSignal
+): Promise<AnalyzeResponse | ShinglesResponse> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
-  const res = await fetch(`${API_URL.replace(/\/$/, "")}${TEXT_ENDPOINT}`, {
+
+  const endpoint =
+    mode === "shingles" ? TEXT_ENDPOINT_SHINGLES : TEXT_ENDPOINT_WORDS;
+
+  const body =
+    mode === "shingles"
+      ? { text, k } // ExtractShinglesRequest
+      : { text }; // AnalyzeTextRequest
+
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(body),
     signal,
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text().catch(() => res.statusText)}`);
-  return (await res.json()) as AnalyzeResponse;
+
+  if (!res.ok) {
+    throw new Error(
+      `API ${res.status}: ${await res.text().catch(() => res.statusText)}`
+    );
+  }
+
+  const data: unknown = await res.json();
+
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    Array.isArray((data as any).shingles)
+  ) {
+    return data as ShinglesResponse;
+  }
+
+  return data as AnalyzeResponse;
 }
 
-async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAnalyzeItem[]> {
+// анализ файлов (только words сейчас)
+async function analyzeFiles(
+  files: File[],
+  signal?: AbortSignal
+): Promise<FileAnalyzeItem[]> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
 
   const fd = new FormData();
   for (const f of files) fd.append("file", f, f.name);
 
-  const res = await fetch(`${API_URL.replace(/\/$/, "")}${FILE_ENDPOINT}`, {
-    method: "POST",
-    body: fd,
-    signal,
-  });
+  const res = await fetch(
+    `${API_URL.replace(/\/$/, "")}${FILE_ENDPOINT_WORDS}`,
+    {
+      method: "POST",
+      body: fd,
+      signal,
+    }
+  );
+
   if (!res.ok) {
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${msg}`);
   }
 
-  
   const data: unknown = await res.json();
 
   function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
     if (typeof x !== "object" || x === null) return false;
     const r = x as Record<string, unknown>;
     return (
-        typeof r.total === "number" &&
-        typeof r.counts === "object" &&
-        r.counts !== null &&
-        typeof r.frequencies === "object" &&
-        r.frequencies !== null
+      typeof r.total === "number" &&
+      typeof r.counts == "object" &&
+      r.counts !== null &&
+      typeof r.frequencies == "object" &&
+      r.frequencies !== null
     );
   }
 
@@ -69,7 +111,10 @@ async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAn
   function hasItemsArray(x: unknown): x is { items: FileAnalyzeItem[] } {
     if (typeof x !== "object" || x === null) return false;
     const r = x as Record<string, unknown>;
-    return Array.isArray(r.items) && (r.items as unknown[]).every(isAnalyzeResponse);
+    return (
+      Array.isArray(r.items) &&
+      (r.items as unknown[]).every(isAnalyzeResponse)
+    );
   }
 
   if (isFileAnalyzeArray(data)) return data;
@@ -79,29 +124,28 @@ async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAn
   throw new Error("Unexpected API response shape");
 }
 
-/* ======================== UI bits ======================== */
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
-      <div className="px-3 py-1 rounded-2xl bg-gray-100 border text-gray-800 text-xs font-medium">
-        <span className="opacity-70 mr-1">{label}</span>
-        <span className="font-semibold">{value}</span>
-      </div>
+    <div className="px-3 py-1 rounded-2xl bg-gray-100 border text-gray-800 text-xs font-medium">
+      <span className="opacity-70 mr-1">{label}</span>
+      <span className="font-semibold">{value}</span>
+    </div>
   );
 }
 
 function Loader({ label = "Analyzing…" }: { label?: string }) {
   return (
-      <div className="flex items-center gap-3 py-6 text-sm opacity-80">
-        <span className="animate-spin inline-block w-5 h-5 rounded-full border-[3px] border-gray-300 border-t-transparent" />
-        <span>{label}</span>
-      </div>
+    <div className="flex items-center gap-3 py-6 text-sm opacity-80">
+      <span className="animate-spin inline-block w-5 h-5 rounded-full border-[3px] border-gray-300 border-t-transparent" />
+      <span>{label}</span>
+    </div>
   );
 }
 
 function ResultsTable({
-                        data,
-                        title,
-                      }: {
+  data,
+  title,
+}: {
   data: AnalyzeResponse;
   title?: string;
 }) {
@@ -117,11 +161,11 @@ function ResultsTable({
 
     type Key = string | number;
     const keyFn: (x: Row) => Key =
-        sortKey === "word"
-            ? (x) => x.word.toLowerCase()
-            : sortKey === "count"
-                ? (x) => x.count
-                : (x) => x.freq;
+      sortKey === "word"
+        ? (x) => x.word.toLowerCase()
+        : sortKey === "count"
+        ? (x) => x.count
+        : (x) => x.freq;
 
     const cmp = (x: Key, y: Key) => (x < y ? -1 : x > y ? 1 : 0);
 
@@ -132,33 +176,38 @@ function ResultsTable({
   }, [data, sortKey, dir]);
 
   const HeaderBtn = ({ label, k }: { label: string; k: typeof sortKey }) => (
-      <button
-          className={`text-left w-full font-semibold ${
-              sortKey === k ? "text-indigo-700" : "text-gray-700"
-          }`}
-          onClick={() =>
-              sortKey === k ? setDir((d) => (d === "asc" ? "desc" : "asc")) : setSortKey(k)
-          }
-          title="Sort"
-      >
-        <span className="align-middle">{label}</span>
-        {sortKey === k && (
-            <span className="ml-1 align-middle opacity-70">{dir === "asc" ? "▲" : "▼"}</span>
-        )}
-      </button>
+    <button
+      className={`text-left w-full font-semibold ${
+        sortKey === k ? "text-indigo-700" : "text-gray-700"
+      }`}
+      onClick={() =>
+        sortKey === k ? setDir((d) => (d === "asc" ? "desc" : "asc")) : setSortKey(k)
+      }
+      title="Sort"
+    >
+      <span className="align-middle">{label}</span>
+      {sortKey === k && (
+        <span className="ml-1 align-middle opacity-70">
+          {dir === "asc" ? "▲" : "▼"}
+        </span>
+      )}
+    </button>
   );
 
   return (
-      <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-4 pt-4 pb-2 flex items-center gap-2">
-          <h3 className="text-base font-semibold">{title ?? "Results"}</h3>
-          <StatBadge label="Total words" value={String(data.total)} />
-          <StatBadge label="Unique" value={String(Object.keys(data.counts).length)} />
-        </div>
+    <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+        <h3 className="text-base font-semibold">{title ?? "Results"}</h3>
+        <StatBadge label="Total words" value={String(data.total)} />
+        <StatBadge
+          label="Unique"
+          value={String(Object.keys(data.counts).length)}
+        />
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-y">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-y">
             <tr>
               <th className="px-4 py-3 w-[50%]">
                 <HeaderBtn label="Word" k="word" />
@@ -170,43 +219,103 @@ function ResultsTable({
                 <HeaderBtn label="Probability" k="freq" />
               </th>
             </tr>
-            </thead>
-            <tbody>
+          </thead>
+          <tbody>
             {rows.map((r) => (
-                <tr key={r.word} className="border-b last:border-0">
-                  <td className="px-4 py-3">{r.word}</td>
-                  <td className="px-4 py-3">{r.count}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 h-1.5 rounded bg-gray-200 overflow-hidden">
-                        <div
-                            className="h-1.5 rounded bg-indigo-600"
-                            style={{ width: pct(r.freq) }}
-                        />
-                      </div>
-                      <span className="tabular-nums">{pct(r.freq)}</span>
+              <tr key={r.word} className="border-b last:border-0">
+                <td className="px-4 py-3">{r.word}</td>
+                <td className="px-4 py-3">{r.count}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-1.5 rounded bg-gray-200 overflow-hidden">
+                      <div
+                        className="h-1.5 rounded bg-indigo-600"
+                        style={{ width: pct(r.freq) }}
+                      />
                     </div>
-                  </td>
-                </tr>
+                    <span className="tabular-nums">{pct(r.freq)}</span>
+                  </div>
+                </td>
+              </tr>
             ))}
             {rows.length === 0 && (
-                <tr>
-                  <td className="px-4 py-6 text-gray-500 text-sm" colSpan={3}>
-                    No data
+              <tr>
+                <td
+                  className="px-4 py-6 text-gray-500 text-sm"
+                  colSpan={3}
+                >
+                  No data
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ShinglesTable({
+  data,
+  title,
+}: {
+  data: ShinglesResponse;
+  title?: string;
+}) {
+  return (
+    <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+        <h3 className="text-base font-semibold">
+          {title ?? "Shingles Result"}
+        </h3>
+        <StatBadge label="Total shingles" value={String(data.shingles.length)} />
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-y">
+            <tr>
+              <th className="px-4 py-3 w-[80px] text-left font-semibold text-gray-700">
+                #
+              </th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                Shingle
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.shingles.length > 0 ? (
+              data.shingles.map((s, i) => (
+                <tr key={i} className="border-b last:border-0 align-top">
+                  <td className="px-4 py-3 text-gray-500 tabular-nums w-[80px]">
+                    {i + 1}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-[13px] whitespace-pre-wrap break-words">
+                    {s}
                   </td>
                 </tr>
+              ))
+            ) : (
+              <tr>
+                <td
+                  className="px-4 py-6 text-gray-500 text-sm"
+                  colSpan={2}
+                >
+                  No shingles
+                </td>
+              </tr>
             )}
-            </tbody>
-          </table>
-        </div>
+          </tbody>
+        </table>
       </div>
+    </div>
   );
 }
 
 function FileDrop({
-                    onFilesSelected,
-                    disabled,
-                  }: {
+  onFilesSelected,
+  disabled,
+}: {
   onFilesSelected: (files: File[]) => void;
   disabled?: boolean;
 }) {
@@ -215,7 +324,7 @@ function FileDrop({
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length) onFilesSelected(files);
-    e.currentTarget.value = ""; 
+    e.currentTarget.value = "";
   };
 
   const onDrop = (e: React.DragEvent<HTMLLabelElement>) => {
@@ -227,58 +336,83 @@ function FileDrop({
   };
 
   return (
-      <label
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (!disabled) setOver(true);
-          }}
-          onDragLeave={() => setOver(false)}
-          onDrop={onDrop}
-          className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl px-4 py-10 text-center cursor-pointer transition ${
-              over ? "border-indigo-500 bg-indigo-50/40" : "border-gray-300 bg-white"
-          } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
-      >
-        <input
-            type="file"
-            multiple
-            className="hidden"
-            disabled={disabled}
-            onChange={onChange}
-            accept=".txt,text/plain" /* расширь при необходимости */
-        />
-        <div className="text-sm font-medium">Drop files here or click to choose</div>
-        <div className="text-xs text-gray-500">TXT recommended. Multiple files supported.</div>
-      </label>
+    <label
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={onDrop}
+      className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl px-4 py-10 text-center cursor-pointer transition ${
+        over ? "border-indigo-500 bg-indigo-50/40" : "border-gray-300 bg-white"
+      } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+    >
+      <input
+        type="file"
+        multiple
+        className="hidden"
+        disabled={disabled}
+        onChange={onChange}
+        accept=".txt,text/plain"
+      />
+      <div className="text-sm font-medium">
+        Drop files here or click to choose
+      </div>
+      <div className="text-xs text-gray-500">
+        TXT recommended. Multiple files supported.
+      </div>
+    </label>
   );
 }
 
-/* ======================== App ======================== */
 export default function App() {
   const [text, setText] = useState("");
 
-  const [textResult, setTextResult] = useState<AnalyzeResponse | null>(null);
-  const [fileResults, setFileResults] = useState<FileAnalyzeItem[] | null>(null);
+  const [textResultWords, setTextResultWords] = useState<AnalyzeResponse | null>(
+    null
+  );
+  const [textResultShingles, setTextResultShingles] =
+    useState<ShinglesResponse | null>(null);
+
+  const [fileResults, setFileResults] = useState<FileAnalyzeItem[] | null>(
+    null
+  );
+  const [activeFileTab, setActiveFileTab] = useState(0);
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [activeFileTab, setActiveFileTab] = useState(0);
 
   const [loading, setLoading] = useState<"text" | "files" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const [analyzeMode, setAnalyzeMode] = useState<"words" | "shingles">(
+    "words"
+  );
+
+  const [k, setK] = useState<number>(3);
+
   const runTextAnalyze = async () => {
     const value = text.trim();
     if (!value) return;
+
     setErr(null);
     setLoading("text");
+
     setFileResults(null);
+    setTextResultWords(null);
+    setTextResultShingles(null);
+
     try {
       const ctrl = new AbortController();
-      const resp = await analyzeText(value, ctrl.signal);
-      setTextResult(resp);
+      const resp = await analyzeText(value, analyzeMode, k, ctrl.signal);
+
+      if ("shingles" in resp) {
+        setTextResultShingles(resp);
+      } else {
+        setTextResultWords(resp);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(msg || "API error");
-      setTextResult(null);
     } finally {
       setLoading(null);
     }
@@ -286,20 +420,24 @@ export default function App() {
 
   const runFilesAnalyze = async () => {
     if (!pendingFiles.length) return;
+
     setErr(null);
     setLoading("files");
-    setTextResult(null);
+
+    setTextResultWords(null);
+    setTextResultShingles(null);
+
     try {
       const ctrl = new AbortController();
       const items = await analyzeFiles(pendingFiles, ctrl.signal);
 
-      
       const itemsWithNames = items.map((it, i) => ({
         fileName: it.fileName || pendingFiles[i]?.name || `File ${i + 1}`,
         total: it.total,
         counts: it.counts,
         frequencies: it.frequencies,
       }));
+
       setFileResults(itemsWithNames);
       setActiveFileTab(0);
     } catch (e: unknown) {
@@ -312,121 +450,182 @@ export default function App() {
   };
 
   return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b">
-          <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-indigo-600" />
-              <h1 className="text-lg font-bold">Text Analysis: Unique Words</h1>
-            </div>
-            <div className="text-xs text-gray-500">API: {API_URL || "not set"}</div>
+    <div className="min-h-screen bg-gray-50">
+      <header className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b">
+        <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600" />
+            <h1 className="text-lg font-bold">Text Analysis</h1>
           </div>
-        </header>
+          <div className="text-xs text-gray-500">
+            API: {API_URL || "not set"}
+          </div>
+        </div>
+      </header>
 
-        <main className="mx-auto max-w-5xl px-4 py-6 grid gap-6">
-          {/* TEXT CARD */}
-          <div className="bg-white border rounded-2xl p-4 shadow-sm">
-            <label className="block text-sm font-semibold mb-2">Paste text to analyze</label>
-            <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Type or paste text here…"
-                className="w-full min-h-[160px] max-h-[420px] resize-y rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <div className="text-xs text-gray-500">Characters: {text.length}</div>
-              <button
-                  onClick={runTextAnalyze}
-                  disabled={loading !== null || text.trim().length < 1}
-                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-500 transition"
-              >
-                Analyze text
-              </button>
+      <main className="mx-auto max-w-5xl px-4 py-6 grid gap-6">
+        <div className="bg-white border rounded-2xl p-4 shadow-sm">
+          <label className="block text-sm font-semibold mb-2">
+            Paste text to analyze
+          </label>
+
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Type or paste text here…"
+            className="w-full min-h-[160px] max-h-[420px] resize-y rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="text-xs text-gray-700 flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+              <div className="text-gray-500">Characters: {text.length}</div>
+
+              {/* режим анализа */}
+              <label className="flex items-center gap-1">
+                <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
+                  Mode
+                </span>
+                <select
+                  className="border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={analyzeMode}
+                  onChange={(e) =>
+                    setAnalyzeMode(
+                      e.target.value === "shingles" ? "shingles" : "words"
+                    )
+                  }
+                >
+                  <option value="words">Words</option>
+                  <option value="shingles">Shingles</option>
+                </select>
+              </label>
+
+              {analyzeMode === "shingles" && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
+                    Step k
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-16 border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={k}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      setK(!Number.isNaN(v) && v > 0 ? v : 1);
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <button
+              onClick={runTextAnalyze}
+              disabled={loading !== "text" && loading !== null || text.trim().length < 1}
+              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-500 transition"
+            >
+              Analyze text
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white border rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold">Analyze files (words)</div>
+            <div className="text-xs text-gray-500">
+              Selected: {pendingFiles.length || 0}
             </div>
           </div>
 
-          {/* FILES CARD */}
-          <div className="bg-white border rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-semibold">Analyze files</div>
-              <div className="text-xs text-gray-500">Selected: {pendingFiles.length || 0}</div>
-            </div>
+          <FileDrop
+            disabled={loading !== null}
+            onFilesSelected={(files) =>
+              setPendingFiles((prev) => [...prev, ...files])
+            }
+          />
 
-            <FileDrop
-                disabled={loading !== null}
-                onFilesSelected={(files) => setPendingFiles((prev) => [...prev, ...files])}
-            />
-
-            {!!pendingFiles.length && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {pendingFiles.map((f, i) => (
-                      <div
-                          key={i}
-                          className="text-xs px-2 py-1 rounded-lg border bg-gray-50 flex items-center gap-2"
-                          title={`${f.name} (${f.type || "unknown"}, ${f.size} bytes)`}
-                      >
-                        <span className="truncate max-w-[220px]">{f.name}</span>
-                        <button
-                            className="px-1 rounded hover:bg-gray-200"
-                            onClick={() =>
-                                setPendingFiles((prev) => prev.filter((_, idx) => idx !== i))
-                            }
-                        >
-                          ✕
-                        </button>
-                      </div>
-                  ))}
+          {!!pendingFiles.length && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {pendingFiles.map((f, i) => (
+                <div
+                  key={i}
+                  className="text-xs px-2 py-1 rounded-lg border bg-gray-50 flex items-center gap-2"
+                  title={`${f.name} (${f.type || "unknown"}, ${f.size} bytes)`}
+                >
+                  <span className="truncate max-w-[220px]">{f.name}</span>
                   <button
-                      className="ml-auto inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-500 transition"
-                      onClick={runFilesAnalyze}
-                      disabled={!pendingFiles.length || loading !== null}
+                    className="px-1 rounded hover:bg-gray-200"
+                    onClick={() =>
+                      setPendingFiles((prev) =>
+                        prev.filter((_, idx) => idx !== i)
+                      )
+                    }
                   >
-                    Analyze file{pendingFiles.length > 1 ? "s" : ""}
+                    ✕
                   </button>
                 </div>
-            )}
+              ))}
+
+              <button
+                className="ml-auto inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-500 transition"
+                onClick={runFilesAnalyze}
+                disabled={!pendingFiles.length || loading !== null}
+              >
+                Analyze file{pendingFiles.length > 1 ? "s" : ""}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {loading === "text" && <Loader label="Analyzing text…" />}
+        {loading === "files" && <Loader label="Analyzing files…" />}
+
+        {err && (
+          <div className="p-4 rounded-xl border bg-red-50 text-red-700 text-sm">
+            API: {err}
           </div>
+        )}
 
-          {/* LOADING / ERROR */}
-          {loading === "text" && <Loader label="Analyzing text…" />}
-          {loading === "files" && <Loader label="Analyzing files…" />}
 
-          {err && (
-              <div className="p-4 rounded-xl border bg-red-50 text-red-700 text-sm">API: {err}</div>
-          )}
+        {!loading && textResultWords && (
+          <ResultsTable data={textResultWords} />
+        )}
 
-          {/* RESULTS */}
-          {!loading && textResult && <ResultsTable data={textResult} />}
 
-          {!loading && fileResults && !!fileResults.length && (
-              <div className="grid gap-3">
-                {/* Tabs */}
-                <div className="flex flex-wrap gap-2">
-                  {fileResults.map((it, i) => (
-                      <button
-                          key={i}
-                          onClick={() => setActiveFileTab(i)}
-                          className={`px-3 py-1.5 rounded-xl border text-sm ${
-                              activeFileTab === i
-                                  ? "bg-indigo-600 text-white border-indigo-600"
-                                  : "bg-white hover:bg-gray-50"
-                          }`}
-                      >
-                        {it.fileName || `File ${i + 1}`}
-                      </button>
-                  ))}
-                </div>
+        {!loading && textResultShingles && (
+          <ShinglesTable data={textResultShingles} />
+        )}
 
-                {/* Active file result */}
-                <ResultsTable
-                    data={fileResults[activeFileTab]}
-                    title={`Results — ${
-                        fileResults[activeFileTab].fileName || `File ${activeFileTab + 1}`
-                    }`}
-                />
-              </div>
-          )}
-        </main>
-      </div>
+
+        {!loading && fileResults && !!fileResults.length && (
+          <div className="grid gap-3">
+            {/* файлы-табы */}
+            <div className="flex flex-wrap gap-2">
+              {fileResults.map((it, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveFileTab(i)}
+                  className={`px-3 py-1.5 rounded-xl border text-sm ${
+                    activeFileTab === i
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white hover:bg-gray-50"
+                  }`}
+                >
+                  {it.fileName || `File ${i + 1}`}
+                </button>
+              ))}
+            </div>
+
+            {/* активный файл */}
+            <ResultsTable
+              data={fileResults[activeFileTab]}
+              title={`Results — ${
+                fileResults[activeFileTab].fileName ||
+                `File ${activeFileTab + 1}`
+              }`}
+            />
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
