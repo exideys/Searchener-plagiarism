@@ -18,7 +18,6 @@ const FILE_ENDPOINT = "/file/analyze";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
-/* ======================== API calls ======================== */
 async function analyzeText(text: string, signal?: AbortSignal): Promise<AnalyzeResponse> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
   const res = await fetch(`${API_URL.replace(/\/$/, "")}${TEXT_ENDPOINT}`, {
@@ -252,7 +251,6 @@ function FileDrop({
   );
 }
 
-/* ======================== App ======================== */
 export default function App() {
   const [text, setText] = useState("");
 
@@ -387,7 +385,7 @@ export default function App() {
             )}
           </div>
 
-          {/* LOADING / ERROR */}
+        
           {loading === "text" && <Loader label="Analyzing text…" />}
           {loading === "files" && <Loader label="Analyzing files…" />}
 
@@ -395,12 +393,11 @@ export default function App() {
               <div className="p-4 rounded-xl border bg-red-50 text-red-700 text-sm">API: {err}</div>
           )}
 
-          {/* RESULTS */}
+          
           {!loading && textResult && <ResultsTable data={textResult} />}
 
           {!loading && fileResults && !!fileResults.length && (
               <div className="grid gap-3">
-                {/* Tabs */}
                 <div className="flex flex-wrap gap-2">
                   {fileResults.map((it, i) => (
                       <button
