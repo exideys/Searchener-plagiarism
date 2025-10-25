@@ -22,6 +22,41 @@ const FILE_ENDPOINT_WORDS = "/file/analyze";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
+/* ===================== type guards ===================== */
+
+function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
+  if (typeof x !== "object" || x === null) return false;
+  const r = x as {
+    total?: unknown;
+    counts?: unknown;
+    frequencies?: unknown;
+  };
+  const totalOk = typeof r.total === "number";
+  const countsOk =
+    typeof r.counts === "object" && r.counts !== null;
+  const freqsOk =
+    typeof r.frequencies === "object" && r.frequencies !== null;
+  return totalOk && countsOk && freqsOk;
+}
+
+function isShinglesResponse(x: unknown): x is ShinglesResponse {
+  if (typeof x !== "object" || x === null) return false;
+  const r = x as { shingles?: unknown };
+  if (!Array.isArray(r.shingles)) return false;
+  return r.shingles.every((item) => typeof item === "string");
+}
+
+function isFileAnalyzeArray(x: unknown): x is FileAnalyzeItem[] {
+  return Array.isArray(x) && x.every(isAnalyzeResponse);
+}
+
+function hasItemsArray(x: unknown): x is { items: FileAnalyzeItem[] } {
+  if (typeof x !== "object" || x === null) return false;
+  const r = x as { items?: unknown };
+  return Array.isArray(r.items) && (r.items as unknown[]).every(isAnalyzeResponse);
+}
+
+/* ======================== API calls ======================== */
 
 // анализ текста (слова ИЛИ шинглы)
 async function analyzeText(
@@ -38,7 +73,7 @@ async function analyzeText(
   const body =
     mode === "shingles"
       ? { text, k } // ExtractShinglesRequest
-      : { text }; // AnalyzeTextRequest
+      : { text };   // AnalyzeTextRequest
 
   const res = await fetch(`${API_URL.replace(/\/$/, "")}${endpoint}`, {
     method: "POST",
@@ -55,15 +90,15 @@ async function analyzeText(
 
   const data: unknown = await res.json();
 
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    Array.isArray((data as any).shingles)
-  ) {
-    return data as ShinglesResponse;
+  if (isShinglesResponse(data)) {
+    return data;
+  }
+  if (isAnalyzeResponse(data)) {
+    return data;
   }
 
-  return data as AnalyzeResponse;
+  // если пришло что-то кривое
+  throw new Error("Unexpected API response shape");
 }
 
 // анализ файлов (только words сейчас)
@@ -92,37 +127,14 @@ async function analyzeFiles(
 
   const data: unknown = await res.json();
 
-  function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
-    if (typeof x !== "object" || x === null) return false;
-    const r = x as Record<string, unknown>;
-    return (
-      typeof r.total === "number" &&
-      typeof r.counts == "object" &&
-      r.counts !== null &&
-      typeof r.frequencies == "object" &&
-      r.frequencies !== null
-    );
-  }
-
-  function isFileAnalyzeArray(x: unknown): x is FileAnalyzeItem[] {
-    return Array.isArray(x) && x.every(isAnalyzeResponse);
-  }
-
-  function hasItemsArray(x: unknown): x is { items: FileAnalyzeItem[] } {
-    if (typeof x !== "object" || x === null) return false;
-    const r = x as Record<string, unknown>;
-    return (
-      Array.isArray(r.items) &&
-      (r.items as unknown[]).every(isAnalyzeResponse)
-    );
-  }
-
   if (isFileAnalyzeArray(data)) return data;
   if (hasItemsArray(data)) return data.items;
   if (isAnalyzeResponse(data)) return [data];
 
   throw new Error("Unexpected API response shape");
 }
+
+/* ======================== UI bits ======================== */
 
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
@@ -365,6 +377,8 @@ function FileDrop({
   );
 }
 
+/* ======================== main component ======================== */
+
 export default function App() {
   const [text, setText] = useState("");
 
@@ -405,7 +419,7 @@ export default function App() {
       const ctrl = new AbortController();
       const resp = await analyzeText(value, analyzeMode, k, ctrl.signal);
 
-      if ("shingles" in resp) {
+      if (isShinglesResponse(resp)) {
         setTextResultShingles(resp);
       } else {
         setTextResultWords(resp);
@@ -464,6 +478,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 grid gap-6">
+        {/* TEXT CARD */}
         <div className="bg-white border rounded-2xl p-4 shadow-sm">
           <label className="block text-sm font-semibold mb-2">
             Paste text to analyze
@@ -520,7 +535,10 @@ export default function App() {
 
             <button
               onClick={runTextAnalyze}
-              disabled={loading !== "text" && loading !== null || text.trim().length < 1}
+              disabled={
+                (loading !== "text" && loading !== null) ||
+                text.trim().length < 1
+              }
               className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-500 transition"
             >
               Analyze text
@@ -528,6 +546,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* FILES CARD */}
         <div className="bg-white border rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-semibold">Analyze files (words)</div>
@@ -576,6 +595,7 @@ export default function App() {
           )}
         </div>
 
+        {/* LOADING / ERROR */}
         {loading === "text" && <Loader label="Analyzing text…" />}
         {loading === "files" && <Loader label="Analyzing files…" />}
 
@@ -585,17 +605,17 @@ export default function App() {
           </div>
         )}
 
-
+        {/* RESULTS TEXT (words) */}
         {!loading && textResultWords && (
           <ResultsTable data={textResultWords} />
         )}
 
-
+        {/* RESULTS TEXT (shingles) */}
         {!loading && textResultShingles && (
           <ShinglesTable data={textResultShingles} />
         )}
 
-
+        {/* RESULTS FILES */}
         {!loading && fileResults && !!fileResults.length && (
           <div className="grid gap-3">
             {/* файлы-табы */}
