@@ -4,6 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,5 +17,8 @@
     <ProjectReference Include="..\..\Contracts\Texts.Contracts\Texts.Contracts.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Texts.Infrastructure\Texts.Infrastructure.csproj" />
   </ItemGroup>
-
+    
+    <ItemGroup>
+        <InternalsVisibleTo Include="Texts.Integration.Tests" />
+    </ItemGroup>
 </Project>

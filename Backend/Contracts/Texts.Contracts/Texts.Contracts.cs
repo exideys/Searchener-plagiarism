@@ -1,8 +1,13 @@
 namespace Texts.Contracts;
 
 public sealed record AnalyzeTextRequest(string Text);
+
 public sealed record AnalyzeTextResponse(
     int Total,
-    IDictionary<string,int> Counts,
-    IDictionary<string,double> Frequencies
+    Dictionary<string, int> Counts,
+    Dictionary<string, double> Frequencies
 );
+
+public sealed record ExtractShinglesRequest(string Text, int K);
+
+public sealed record ExtractShinglesResponse(string[] Shingles);

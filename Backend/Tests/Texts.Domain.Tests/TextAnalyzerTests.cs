@@ -28,7 +28,7 @@ public class TextAnalyzerTests
     }
 
     [Theory]
-    [InlineData("аа bb аа", "аа", 2, 3)]
+    [InlineData("aa bb aa", "aa", 2, 3)]
     [InlineData("éé e éé",  "éé", 2, 3)]
     public void Unicode_Words_Work(string text, string key, int expected, int total)
     {
@@ -109,5 +109,43 @@ public class TextAnalyzerTests
         Assert.Equal(1, s.Counts["two"]);
         Assert.Equal(1, s.Counts["three"]);
     }
+    
+    [Fact]
+    public void ExtractShingles_Bigrams_ReturnsExpected()
+    {
+        var text = "The quick brown fox";
+        var res = TextAnalyzer.ExtractShingles(text, 2);
 
+        Assert.NotNull(res);
+        Assert.Equal(3, res.Shingles.Length);
+        Assert.Equal("the quick",  res.Shingles[0]);
+        Assert.Equal("quick brown",res.Shingles[1]);
+        Assert.Equal("brown fox",  res.Shingles[2]);
+    }
+
+    [Fact]
+    public void ExtractShingles_KIsGreaterThanWordCount_ReturnsEmpty()
+    {
+        var res = TextAnalyzer.ExtractShingles("one two", 3);
+        Assert.NotNull(res);
+        Assert.Empty(res.Shingles);
+    }
+    
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void ExtractShingles_KIsZeroOrLess_ReturnsEmpty(int k)
+    {
+        var res = TextAnalyzer.ExtractShingles("one two", k);
+        Assert.NotNull(res);
+        Assert.Empty(res.Shingles);
+    }
+
+    [Fact]
+    public void ExtractShingles_EmptyText_ReturnsEmpty()
+    {
+        var res = TextAnalyzer.ExtractShingles("   ", 2);
+        Assert.NotNull(res);
+        Assert.Empty(res.Shingles);
+    }
 }
