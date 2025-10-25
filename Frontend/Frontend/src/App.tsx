@@ -78,7 +78,6 @@ async function analyzeFiles(files: File[], signal?: AbortSignal): Promise<FileAn
   throw new Error("Unexpected API response shape");
 }
 
-/* ======================== UI bits ======================== */
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
       <div className="px-3 py-1 rounded-2xl bg-gray-100 border text-gray-800 text-xs font-medium">
@@ -315,7 +314,7 @@ export default function App() {
           <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-indigo-600" />
-              <h1 className="text-lg font-bold">Text Analysis: Unique Words</h1>
+              <h1 className="text-lg font-bold">Searchener-plagiarism</h1>
             </div>
             <div className="text-xs text-gray-500">API: {API_URL || "not set"}</div>
           </div>
@@ -414,7 +413,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Active file result */}
                 <ResultsTable
                     data={fileResults[activeFileTab]}
                     title={`Results — ${
