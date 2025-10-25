@@ -1,6 +1,6 @@
-namespace Texts.Application;
+using Texts.Domain; 
 
 public interface IShingleService
 {
-    string[] Extract(string text, int k);
+    ShingleAnalyzer Extract(string text, int k); 
 }

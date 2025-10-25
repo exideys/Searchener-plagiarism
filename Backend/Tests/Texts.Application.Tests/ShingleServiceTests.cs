@@ -9,26 +9,25 @@ public class ShingleServiceTests
     private readonly IShingleService _shingleService = new ShingleService();
 
     [Fact]
-    public void Extract_ValidTextAndK_ReturnsCorrectShingles()
+    public void Extract_ValidTextAndK_ReturnsCorrectAnalysis()
     {
         var text = "one two three four";
         var k = 2;
 
         var result = _shingleService.Extract(text, k);
 
-        Assert.Equal(3, result.Length);
-        Assert.Equal("one two", result[0]);
-        Assert.Equal("two three", result[1]);
-        Assert.Equal("three four", result[2]);
+        Assert.NotNull(result);
+        Assert.Equal(3, result.Total);
+        Assert.True(result.Counts.ContainsKey("one two"));
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Extract_NullOrWhitespaceText_ThrowsArgumentException(string text)
+    public void Extract_NullOrWhitespaceText_ThrowsArgumentException(string? text)
     {
-        var ex = Assert.Throws<ArgumentException>(() => _shingleService.Extract(text, 2));
+        var ex = Assert.Throws<ArgumentException>(() => _shingleService.Extract(text!, 2));
         Assert.Contains("Text is required", ex.Message);
     }
 
@@ -42,7 +41,7 @@ public class ShingleServiceTests
     }
 
     [Fact]
-    public void Extract_TextLengthLessThanK_ReturnsEmptyArray()
+    public void Extract_TextLengthLessThanK_ReturnsEmptyResult()
     {
         var text = "one two";
         var k = 3;
@@ -50,14 +49,14 @@ public class ShingleServiceTests
         var result = _shingleService.Extract(text, k);
 
         Assert.NotNull(result);
-        Assert.Empty(result);
+        Assert.Equal(0, result.Total);
+        Assert.Empty(result.Counts);
     }
 
     [Fact]
     public void Extract_TextTooLarge_ThrowsArgumentException()
     {
         var longText = new string('a', 1_000_001);
-
         var ex = Assert.Throws<ArgumentException>(() => _shingleService.Extract(longText, 2));
         Assert.Contains("Text is too large", ex.Message);
     }

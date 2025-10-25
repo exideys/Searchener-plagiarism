@@ -29,7 +29,7 @@ public class TextAnalyzerTests
 
     [Theory]
     [InlineData("aa bb aa", "aa", 2, 3)]
-    [InlineData("éé e éé",  "éé", 2, 3)]
+    [InlineData("éé e éé", "éé", 2, 3)]
     public void Unicode_Words_Work(string text, string key, int expected, int total)
     {
         var s = TextAnalyzer.Analyze(text);
@@ -54,7 +54,7 @@ public class TextAnalyzerTests
         Assert.Equal(3, s.Counts["hello"]);
         Assert.Equal(2, s.Counts["world"]);
     }
-    
+
     [Fact]
     public void Punctuation_IsRemoved_AndDoesNotGlueWords()
     {
@@ -109,43 +109,44 @@ public class TextAnalyzerTests
         Assert.Equal(1, s.Counts["two"]);
         Assert.Equal(1, s.Counts["three"]);
     }
-    
-    [Fact]
-    public void ExtractShingles_Bigrams_ReturnsExpected()
-    {
-        var text = "The quick brown fox";
-        var res = TextAnalyzer.ExtractShingles(text, 2);
 
-        Assert.NotNull(res);
-        Assert.Equal(3, res.Shingles.Length);
-        Assert.Equal("the quick",  res.Shingles[0]);
-        Assert.Equal("quick brown",res.Shingles[1]);
-        Assert.Equal("brown fox",  res.Shingles[2]);
+    [Fact]
+    public void ExtractShingles_CountsAndFrequencies_AreCorrect()
+    {
+        var text = "one two three one two";
+        var k = 2;
+
+        var result = TextAnalyzer.ExtractShingles(text, k);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.Total);
+        Assert.Equal(2, result.Counts["one two"]);
+        Assert.Equal(1, result.Counts["two three"]);
+        Assert.Equal(1, result.Counts["three one"]);
+        Assert.Equal(0.5, result.Frequencies["one two"]);
+        Assert.Equal(0.25, result.Frequencies["two three"]);
+        Assert.Equal(0.25, result.Frequencies["three one"]);
     }
 
     [Fact]
-    public void ExtractShingles_KIsGreaterThanWordCount_ReturnsEmpty()
+    public void ExtractShingles_KIsGreaterThanWordCount_ReturnsEmptyResult()
     {
-        var res = TextAnalyzer.ExtractShingles("one two", 3);
-        Assert.NotNull(res);
-        Assert.Empty(res.Shingles);
+        var result = TextAnalyzer.ExtractShingles("one two", 3);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Total);
+        Assert.Empty(result.Counts);
+        Assert.Empty(result.Frequencies);
     }
-    
+
     [Theory]
     [InlineData(0)]
     [InlineData(-5)]
-    public void ExtractShingles_KIsZeroOrLess_ReturnsEmpty(int k)
+    public void ExtractShingles_KIsZeroOrLess_ReturnsEmptyResult(int k)
     {
-        var res = TextAnalyzer.ExtractShingles("one two", k);
-        Assert.NotNull(res);
-        Assert.Empty(res.Shingles);
-    }
+        var result = TextAnalyzer.ExtractShingles("one two", k);
 
-    [Fact]
-    public void ExtractShingles_EmptyText_ReturnsEmpty()
-    {
-        var res = TextAnalyzer.ExtractShingles("   ", 2);
-        Assert.NotNull(res);
-        Assert.Empty(res.Shingles);
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Total);
     }
 }

@@ -67,8 +67,11 @@ app.MapPost("/text/shingles", ([FromBody] ExtractShinglesRequest req, IShingleSe
     {
         try
         {
-            var shingles = svc.Extract(req.Text, req.K);
-            return Results.Ok(new ExtractShinglesResponse(shingles));
+            var stats = svc.Extract(req.Text, req.K);
+            var counts = stats.Counts.ToDictionary(kv => kv.Key, kv => kv.Value);
+            var freqs = stats.Frequencies.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            return Results.Ok(new ExtractShinglesResponse(stats.Total, counts, freqs));
         }
         catch (ArgumentException ex)
         {
@@ -76,9 +79,10 @@ app.MapPost("/text/shingles", ([FromBody] ExtractShinglesRequest req, IShingleSe
         }
     })
     .WithName("ExtractShingles")
-    .Produces<ExtractShinglesResponse>(StatusCodes.Status200OK)
+    .Produces<ExtractShinglesResponse>(StatusCodes.Status200OK) 
     .Produces(StatusCodes.Status400BadRequest)
     .WithOpenApi();
+
 
 app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService svc) =>
     {

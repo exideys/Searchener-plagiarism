@@ -10,4 +10,8 @@ public sealed record AnalyzeTextResponse(
 
 public sealed record ExtractShinglesRequest(string Text, int K);
 
-public sealed record ExtractShinglesResponse(string[] Shingles);
+public sealed record ExtractShinglesResponse(
+    int Total,
+    Dictionary<string, int> Counts,
+    Dictionary<string, double> Frequencies
+);

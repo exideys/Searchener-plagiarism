@@ -6,7 +6,7 @@ public sealed class ShingleService : IShingleService
 {
     private const int MaxChars = 1_000_000; 
 
-    public string[] Extract(string text, int k)
+    public ShingleAnalyzer Extract(string text, int k)
     {
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("Text is required");
@@ -17,11 +17,10 @@ public sealed class ShingleService : IShingleService
         if (text.Length > MaxChars)
             throw new ArgumentException($"Text is too large (>{MaxChars} chars)");
         
-        var tokens = TextAnalyzer.Tokenize(text);
-        if (tokens.Length < k)
-            return [];
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("Text is required");
         
-        var sh = TextAnalyzer.ExtractShingles(text, k);
-        return sh.Shingles;
+        
+        return TextAnalyzer.ExtractShingles(text, k);
     }
 }

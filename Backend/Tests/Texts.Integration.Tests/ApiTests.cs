@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.VisualStudio.TestPlatform.TestHost;
 using Texts.Contracts;
 using Xunit;
 
@@ -29,7 +28,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.EnsureSuccessStatusCode();
         var dto = await response.Content.ReadFromJsonAsync<AnalyzeTextResponse>(_jsonOptions);
-        
+
         Assert.NotNull(dto);
         Assert.Equal(3, dto.Total);
         Assert.Equal(2, dto.Counts["aa"]);
@@ -48,9 +47,9 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task ExtractShingles_ValidRequest_Returns200AndShingles()
+    public async Task ExtractShingles_ValidRequest_Returns200AndShingleStats()
     {
-        var request = new ExtractShinglesRequest("one two three", 2);
+        var request = new ExtractShinglesRequest("one two three one two", 2);
 
         var response = await _client.PostAsJsonAsync("/text/shingles", request);
 
@@ -58,16 +57,19 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         var dto = await response.Content.ReadFromJsonAsync<ExtractShinglesResponse>(_jsonOptions);
 
         Assert.NotNull(dto);
-        Assert.Equal(new[] { "one two", "two three" }, dto.Shingles);
+        Assert.Equal(4, dto.Total);
+        Assert.Equal(2, dto.Counts["one two"]);
+        Assert.Equal(1, dto.Counts["two three"]);
+        Assert.Equal(0.5, dto.Frequencies["one two"]);
     }
-    
+
     [Fact]
     public async Task ExtractShingles_InvalidK_Returns400()
     {
         var request = new ExtractShinglesRequest("some text", 0);
 
         var response = await _client.PostAsJsonAsync("/text/shingles", request);
-        
+
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -82,7 +84,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-    
+
     [Fact]
     public async Task AnalyzeFile_UnsupportedExtension_Returns400()
     {
@@ -93,7 +95,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-    
+
     [Fact]
     public async Task AnalyzeFile_ValidFile_Returns200AndCorrectStats()
     {
@@ -111,7 +113,9 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(2, dto.Counts["a"]);
         Assert.Equal(1, dto.Counts["b"]);
     }
-    
+
+
+
     [Fact]
     public async Task AnalyzeFile_NotMultipart_Returns400()
     {

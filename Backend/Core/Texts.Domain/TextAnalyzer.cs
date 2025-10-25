@@ -60,22 +60,36 @@ public static class TextAnalyzer
         var words = Tokenize(text);
 
         if (k <= 0 || words.Length < k)
-            return new ShingleAnalyzer { Shingles = [] };
-
-        var result = new string[words.Length - k + 1];
-        
+            return new ShingleAnalyzer(); 
+        var allShingles = new List<string>();
         for (int i = 0; i <= words.Length - k; i++)
         {
-            var sb = new StringBuilder();
-            for (int j = 0; j < k; j++)
-            {
-                if (j > 0) sb.Append(' ');
-                sb.Append(words[i + j]);
-            }
-
-            result[i] = sb.ToString();
+            allShingles.Add(string.Join(" ", words.Skip(i).Take(k)));
         }
 
-        return new ShingleAnalyzer { Shingles = result };
+        var total = allShingles.Count;
+        var counts = new Dictionary<string, int>();
+        
+        foreach (var shingle in allShingles)
+        {
+            counts.TryGetValue(shingle, out var currentCount);
+            counts[shingle] = currentCount + 1;
+        }
+
+        var freqs = new Dictionary<string, double>();
+        if (total > 0)
+        {
+            foreach (var (shingle, count) in counts)
+            {
+                freqs[shingle] = (double)count / total;
+            }
+        }
+        
+        return new ShingleAnalyzer
+        {
+            Total = total,
+            Counts = counts,
+            Frequencies = freqs
+        };
     }
 }
