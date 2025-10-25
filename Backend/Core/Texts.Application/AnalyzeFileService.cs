@@ -1,49 +1,45 @@
+using System.Text;
 using Texts.Domain;
 
 namespace Texts.Application;
 
-public interface IAnalyzeFileService
+public sealed class AnalyzeFileService : IAnalyzeFileService
 {
-    Task<TextStats> Execute(Stream fileStream, string fileName);
-}
+    private readonly ITextService textService;
 
-public sealed class AnalyzeFileService(ITextService textService) : IAnalyzeFileService
-{
+    // допустимые расширения файла (низкий риск менять часто, можно держать здесь)
+    private static readonly string[] AllowedExtensions = [".txt", ".log"];
+
+    public AnalyzeFileService(ITextService textService)
+    {
+        this.textService = textService;
+    }
+
     public async Task<TextStats> Execute(Stream fileStream, string fileName)
     {
         ValidateFile(fileStream, fileName);
-        
-        if (fileStream.CanSeek) fileStream.Position = 0;
-        
-        using var reader = new StreamReader(
-            fileStream,
-            System.Text.Encoding.UTF8,
-            detectEncodingFromByteOrderMarks: true,
-            bufferSize: 4096,
-            leaveOpen: true);
+
+        // читаем весь текст файла
+        using var reader = new StreamReader(fileStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
         var content = await reader.ReadToEndAsync();
-        
+
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("File content is empty");
-        
+
         return textService.Analyze(content);
     }
 
     private static void ValidateFile(Stream fileStream, string fileName)
     {
         if (fileStream is null)
-            throw new ArgumentException("File stream is null");
-        
+            throw new ArgumentNullException(nameof(fileStream), "File stream is required");
+
         if (string.IsNullOrWhiteSpace(fileName))
-            throw new ArgumentException("File name is required");
-        var allowedExtensions = new[] { ".txt", ".text", ".log" };
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        
-        if (string.IsNullOrEmpty(extension) || !allowedExtensions.Contains(extension))
-            throw new ArgumentException($"File type not supported. Allowed: {string.Join(", ", allowedExtensions)}");
-        
-        if (fileStream is { CanSeek: true, Length: 0 })
-            throw new ArgumentException("File stream is empty");
+            throw new ArgumentException("File name is required", nameof(fileName));
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(ext))
+            throw new ArgumentException($"Unsupported file extension '{ext}'. Allowed: {string.Join(", ", AllowedExtensions)}");
     }
 }

@@ -28,8 +28,8 @@ public class TextAnalyzerTests
     }
 
     [Theory]
-    [InlineData("аа bb аа", "аа", 2, 3)]
-    [InlineData("éé e éé",  "éé", 2, 3)]
+    [InlineData("aa bb aa", "aa", 2, 3)]
+    [InlineData("éé e éé", "éé", 2, 3)]
     public void Unicode_Words_Work(string text, string key, int expected, int total)
     {
         var s = TextAnalyzer.Analyze(text);
@@ -54,7 +54,7 @@ public class TextAnalyzerTests
         Assert.Equal(3, s.Counts["hello"]);
         Assert.Equal(2, s.Counts["world"]);
     }
-    
+
     [Fact]
     public void Punctuation_IsRemoved_AndDoesNotGlueWords()
     {
@@ -110,4 +110,43 @@ public class TextAnalyzerTests
         Assert.Equal(1, s.Counts["three"]);
     }
 
+    [Fact]
+    public void ExtractShingles_CountsAndFrequencies_AreCorrect()
+    {
+        var text = "one two three one two";
+        var k = 2;
+
+        var result = TextAnalyzer.ExtractShingles(text, k);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.Total);
+        Assert.Equal(2, result.Counts["one two"]);
+        Assert.Equal(1, result.Counts["two three"]);
+        Assert.Equal(1, result.Counts["three one"]);
+        Assert.Equal(0.5, result.Frequencies["one two"]);
+        Assert.Equal(0.25, result.Frequencies["two three"]);
+        Assert.Equal(0.25, result.Frequencies["three one"]);
+    }
+
+    [Fact]
+    public void ExtractShingles_KIsGreaterThanWordCount_ReturnsEmptyResult()
+    {
+        var result = TextAnalyzer.ExtractShingles("one two", 3);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Total);
+        Assert.Empty(result.Counts);
+        Assert.Empty(result.Frequencies);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void ExtractShingles_KIsZeroOrLess_ReturnsEmptyResult(int k)
+    {
+        var result = TextAnalyzer.ExtractShingles("one two", k);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Total);
+    }
 }

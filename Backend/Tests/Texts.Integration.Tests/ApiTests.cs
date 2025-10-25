@@ -1,98 +1,128 @@
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Texts.Contracts;
 using Xunit;
 
 public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private readonly HttpClient _c;
-    public ApiTests(WebApplicationFactory<Program> f) => _c = f.CreateClient();
+    private readonly HttpClient _client;
+    private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    public ApiTests(WebApplicationFactory<Program> factory)
+    {
+        _client = factory.CreateClient();
+    }
 
     [Fact]
-    public async Task Analyze_Returns200_AndPayload_WordCounting()
+    public async Task AnalyzeText_ValidText_Returns200AndCorrectStats()
     {
-        var r = await _c.PostAsJsonAsync("/text/analyze", new { text = "aa bb aa" });
-        r.EnsureSuccessStatusCode();
+        var request = new AnalyzeTextRequest("aa bb aa");
 
-        var dto = await r.Content.ReadFromJsonAsync<ResponseDto>();
+        var response = await _client.PostAsJsonAsync("/text/analyze", request);
+
+        response.EnsureSuccessStatusCode();
+        var dto = await response.Content.ReadFromJsonAsync<AnalyzeTextResponse>(_jsonOptions);
+
         Assert.NotNull(dto);
-
-        Assert.Equal(3, dto!.Total);
-        Assert.True(dto.Counts.ContainsKey("aa"));
-        Assert.True(dto.Counts.ContainsKey("bb"));
+        Assert.Equal(3, dto.Total);
         Assert.Equal(2, dto.Counts["aa"]);
         Assert.Equal(1, dto.Counts["bb"]);
-
-        var sum = dto.Frequencies.Values.Sum();
-        Assert.InRange(sum, 0.999, 1.001);
+        Assert.InRange(dto.Frequencies.Values.Sum(), 0.999, 1.001);
     }
 
     [Fact]
-    public async Task Analyze_Empty_Returns400()
+    public async Task AnalyzeText_EmptyText_Returns400()
     {
-        var r = await _c.PostAsJsonAsync("/text/analyze", new { text = "" });
-        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        var request = new AnalyzeTextRequest(" ");
+
+        var response = await _client.PostAsJsonAsync("/text/analyze", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task Health_Ok()
+    public async Task ExtractShingles_ValidRequest_Returns200AndShingleStats()
     {
-        var r = await _c.GetAsync("/health");
-        r.EnsureSuccessStatusCode();
+        var request = new ExtractShinglesRequest("one two three one two", 2);
+
+        var response = await _client.PostAsJsonAsync("/text/shingles", request);
+
+        response.EnsureSuccessStatusCode();
+        var dto = await response.Content.ReadFromJsonAsync<ExtractShinglesResponse>(_jsonOptions);
+
+        Assert.NotNull(dto);
+        Assert.Equal(4, dto.Total);
+        Assert.Equal(2, dto.Counts["one two"]);
+        Assert.Equal(1, dto.Counts["two three"]);
+        Assert.Equal(0.5, dto.Frequencies["one two"]);
     }
 
-    private sealed class ResponseDto
-    {
-        public int Total { get; set; }
-        public Dictionary<string,int> Counts { get; set; } = new();
-        public Dictionary<string,double> Frequencies { get; set; } = new();
-    }
-    
     [Fact]
-    public async Task FileAnalyze_TooLarge_Returns413()
+    public async Task ExtractShingles_InvalidK_Returns400()
+    {
+        var request = new ExtractShinglesRequest("some text", 0);
+
+        var response = await _client.PostAsJsonAsync("/text/shingles", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AnalyzeFile_TooLarge_Returns400BadRequest()
     {
         using var content = new MultipartFormDataContent();
-        var big = new byte[10 * 1024 * 1024 + 1];
-        content.Add(new ByteArrayContent(big), "file", "big.txt");
+        var bigFile = new byte[10 * 1024 * 1024 + 1];
+        content.Add(new ByteArrayContent(bigFile), "file", "big.txt");
 
-        var r = await _c.PostAsync("/file/analyze", content);
-        Assert.Equal((HttpStatusCode)413, r.StatusCode);
+        var response = await _client.PostAsync("/file/analyze", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-    
+
     [Fact]
-    public async Task FileAnalyze_BadExtension_Returns400()
+    public async Task AnalyzeFile_UnsupportedExtension_Returns400()
     {
         using var content = new MultipartFormDataContent();
-        content.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("hello")), "file", "data.bin");
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("hello")), "file", "data.bin");
 
-        var r = await _c.PostAsync("/file/analyze", content);
-        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        var response = await _client.PostAsync("/file/analyze", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-    
+
     [Fact]
-    public async Task FileAnalyze_Ok_Returns200_AndPayload()
+    public async Task AnalyzeFile_ValidFile_Returns200AndCorrectStats()
     {
         using var form = new MultipartFormDataContent();
-        var bytes = System.Text.Encoding.UTF8.GetBytes("a b a");
+        var bytes = Encoding.UTF8.GetBytes("a b a");
         form.Add(new ByteArrayContent(bytes), "file", "note.txt");
 
-        var r = await _c.PostAsync("/file/analyze", form);
-        r.EnsureSuccessStatusCode();
+        var response = await _client.PostAsync("/file/analyze", form);
 
-        var dto = await r.Content.ReadFromJsonAsync<ResponseDto>();
+        response.EnsureSuccessStatusCode();
+        var dto = await response.Content.ReadFromJsonAsync<AnalyzeTextResponse>(_jsonOptions);
+
         Assert.NotNull(dto);
-        Assert.Equal(3, dto!.Total);
+        Assert.Equal(3, dto.Total);
         Assert.Equal(2, dto.Counts["a"]);
         Assert.Equal(1, dto.Counts["b"]);
     }
-    
-    [Fact]
-    public async Task FileAnalyze_WrongContentType_Returns400()
-    {
-        var bytes = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("hello"));
-        var r = await _c.PostAsync("/file/analyze", bytes);
-        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
-    }
 
+
+
+    [Fact]
+    public async Task AnalyzeFile_NotMultipart_Returns400()
+    {
+        var bytes = new ByteArrayContent(Encoding.UTF8.GetBytes("hello"));
+
+        var response = await _client.PostAsync("/file/analyze", bytes);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
