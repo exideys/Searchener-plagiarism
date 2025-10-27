@@ -10,7 +10,8 @@ public static class DependencyInjection
         services.AddScoped<ITextService, TextService>();
         services.AddScoped<IAnalyzeFileService, AnalyzeFileService>();
         services.AddScoped<IShingleService, ShingleService>();
-
+        services.AddScoped<IPlagiarismDetectorService, PlagiarismDetectorService>();
+        
         return services;
     }
 }

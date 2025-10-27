@@ -638,5 +638,6 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
-
+**/.env
+.env
 # End of https://www.toptal.com/developers/gitignore/api/rider,csharp,aspnetcore,dotnetcore,macos,windows

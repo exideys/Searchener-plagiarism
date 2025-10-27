@@ -17,9 +17,6 @@ public sealed class ShingleService : IShingleService
         if (text.Length > MaxChars)
             throw new ArgumentException($"Text is too large (>{MaxChars} chars)");
         
-        if (string.IsNullOrWhiteSpace(text))
-            throw new ArgumentException("Text is required");
-        
         
         return TextAnalyzer.ExtractShingles(text, k);
     }

@@ -1,36 +1,47 @@
 using System.Text;
 using Texts.Domain;
+using Microsoft.Extensions.Configuration;
 
 namespace Texts.Application;
 
 public sealed class AnalyzeFileService : IAnalyzeFileService
 {
-    private readonly ITextService textService;
+    private readonly ITextService _textService;
+    private readonly IShingleService _shingleService;
+    
+    private readonly string[] _allowedExtensions;
 
-    // допустимые расширения файла (низкий риск менять часто, можно держать здесь)
-    private static readonly string[] AllowedExtensions = [".txt", ".log"];
-
-    public AnalyzeFileService(ITextService textService)
+    public AnalyzeFileService(ITextService textService, IShingleService shingleService, IConfiguration configuration)
     {
-        this.textService = textService;
+        _textService = textService;
+        _shingleService = shingleService;
+        _allowedExtensions = configuration.GetSection("AllowedFileExtensions").Get<string[]>() ?? [".txt", ".log"];
     }
 
     public async Task<TextStats> Execute(Stream fileStream, string fileName)
     {
-        ValidateFile(fileStream, fileName);
-
-        // читаем весь текст файла
-        using var reader = new StreamReader(fileStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-
-        var content = await reader.ReadToEndAsync();
-
-        if (string.IsNullOrWhiteSpace(content))
-            throw new ArgumentException("File content is empty");
-
-        return textService.Analyze(content);
+        var content = await ReadAndValidateFileContentAsync(fileStream, fileName);
+        return _textService.Analyze(content);
     }
 
-    private static void ValidateFile(Stream fileStream, string fileName)
+    public async Task<ShingleAnalyzer> ExecuteShingleAnalysis(Stream fileStream, string fileName, int k)
+    {
+        var content = await ReadAndValidateFileContentAsync(fileStream, fileName);
+        return _shingleService.Extract(content, k);
+    }
+    
+    public async Task<string> ReadAndValidateFileContentAsync(Stream fileStream, string fileName)
+    {
+        ValidateFile(fileStream, fileName);
+        using var reader = new StreamReader(fileStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        var content = await reader.ReadToEndAsync();
+        if (string.IsNullOrWhiteSpace(content))
+            throw new ArgumentException("File content is empty");
+        return content;
+    }
+
+
+    private void ValidateFile(Stream fileStream, string fileName)
     {
         if (fileStream is null)
             throw new ArgumentNullException(nameof(fileStream), "File stream is required");
@@ -39,7 +50,7 @@ public sealed class AnalyzeFileService : IAnalyzeFileService
             throw new ArgumentException("File name is required", nameof(fileName));
 
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
-        if (!AllowedExtensions.Contains(ext))
-            throw new ArgumentException($"Unsupported file extension '{ext}'. Allowed: {string.Join(", ", AllowedExtensions)}");
+        if (!_allowedExtensions.Contains(ext))
+            throw new ArgumentException($"Unsupported file extension '{ext}'. Allowed: {string.Join(", ", _allowedExtensions)}");
     }
 }
