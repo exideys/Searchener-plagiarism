@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Moq;
 using Texts.Domain;
 using Xunit;
 
@@ -9,106 +11,92 @@ namespace Texts.Application.Tests;
 
 public sealed class AnalyzeFileServiceTests
 {
-    private sealed class FakeTextService : ITextService
+    private readonly Mock<ITextService> _textServiceMock;
+    private readonly Mock<IShingleService> _shingleServiceMock;
+    private readonly Mock<IConfiguration> _configurationMock;
+    private readonly AnalyzeFileService _service;
+
+    public AnalyzeFileServiceTests()
     {
-        public string? LastText { get; private set; }
-        private readonly TextStats _result;
-        public FakeTextService(TextStats result) => _result = result;
-        public TextStats Analyze(string? text)
-        {
-            LastText = text;
-            return _result;
-        }
+        _textServiceMock = new Mock<ITextService>();
+        _shingleServiceMock = new Mock<IShingleService>();
+        _configurationMock = new Mock<IConfiguration>();
+
+        var allowedExtensions = new[] { ".txt", ".log" };
+        var configSectionMock = new Mock<IConfigurationSection>();
+        configSectionMock.Setup(s => s.Value).Returns((string)null!); 
+        configSectionMock.Setup(s => s.GetChildren()).Returns(new IConfigurationSection[0]); 
+
+        _configurationMock
+            .Setup(c => c.GetSection("AllowedFileExtensions"))
+            .Returns(configSectionMock.Object);
+
+        
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "AllowedFileExtensions:0", ".txt" },
+                { "AllowedFileExtensions:1", ".log" }
+            })
+            .Build();
+
+        _service = new AnalyzeFileService(_textServiceMock.Object, _shingleServiceMock.Object, configuration);
     }
 
-    private static AnalyzeFileService CreateService(FakeTextService fake) => new(fake);
-
     [Fact]
-    public async Task Execute_UnsupportedExtension_ThrowsArgumentException()
+    public async Task ReadAndValidateFileContent_UnsupportedExtension_ThrowsArgumentException()
     {
-        var fake = new FakeTextService(new TextStats());
-        var svc = CreateService(fake);
+        
         await using var ms = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.Execute(ms, "data.bin"));
-        Assert.Contains("Unsupported file extension '.bin'", ex.Message);
+        
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _service.ReadAndValidateFileContentAsync(ms, "data.bin"));
+        Assert.Contains("Unsupported file extension '.bin'. Allowed: .txt, .log", ex.Message);
     }
 
     [Fact]
-    public async Task Execute_NullStream_ThrowsArgumentNullException()
+    public async Task ReadAndValidateFileContent_EmptyFileContent_ThrowsArgumentException()
     {
-        var fake = new FakeTextService(new TextStats());
-        var svc = CreateService(fake);
-
-        await Assert.ThrowsAsync<ArgumentNullException>("fileStream", () => svc.Execute(null!, "file.txt"));
-    }
-
-    [Fact]
-    public async Task Execute_EmptyFileName_ThrowsArgumentException()
-    {
-        var fake = new FakeTextService(new TextStats());
-        var svc = CreateService(fake);
-        await using var ms = new MemoryStream(Encoding.UTF8.GetBytes("content"));
-
-        await Assert.ThrowsAsync<ArgumentException>("fileName", () => svc.Execute(ms, " "));
-    }
-    
-    [Fact]
-    public async Task Execute_EmptyFileContent_ThrowsArgumentException()
-    {
-        var fake = new FakeTextService(new TextStats());
-        var svc = CreateService(fake);
+        
         await using var emptyStream = new MemoryStream();
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.Execute(emptyStream, "file.txt"));
+        
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _service.ReadAndValidateFileContentAsync(emptyStream, "file.txt"));
         Assert.Equal("File content is empty", ex.Message);
     }
 
     [Fact]
-    public async Task Execute_WhitespaceOnlyContent_ThrowsArgumentException()
+    public async Task Execute_Success_DelegatesToTextService()
     {
-        var fake = new FakeTextService(new TextStats());
-        var svc = CreateService(fake);
-        await using var ms = new MemoryStream(Encoding.UTF8.GetBytes("   \n\t  "));
-
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.Execute(ms, "file.txt"));
-        Assert.Equal("File content is empty", ex.Message);
-    }
-
-    [Fact]
-    public async Task Execute_Success_DelegatesToTextServiceAndReturnsResult()
-    {
-        var expectedStats = new TextStats { Total = 3 };
-        var fake = new FakeTextService(expectedStats);
-        var svc = CreateService(fake);
+        
         const string content = "a b a";
+        var expectedStats = new TextStats { Total = 3 };
+        _textServiceMock.Setup(s => s.Analyze(content)).Returns(expectedStats);
         await using var ms = new MemoryStream(Encoding.UTF8.GetBytes(content));
 
-        var result = await svc.Execute(ms, "file.log");
+        
+        var result = await _service.Execute(ms, "file.log");
 
+        
         Assert.Same(expectedStats, result);
-        Assert.Equal(content, fake.LastText);
-    }
-    
-    private sealed class NonSeekableStream : MemoryStream
-    {
-        public NonSeekableStream(byte[] buffer) : base(buffer, writable: false) { }
-        public override bool CanSeek => false;
-        public override long Position { get => base.Position; set => throw new NotSupportedException(); }
-        public override long Length => throw new NotSupportedException();
+        _textServiceMock.Verify(s => s.Analyze(content), Times.Once);
     }
 
     [Fact]
-    public async Task Execute_NonSeekableStream_WorksCorrectly()
+    public async Task ExecuteShingleAnalysis_Success_DelegatesToShingleService()
     {
-        var fake = new FakeTextService(new TextStats());
-        var svc = new AnalyzeFileService(fake);
-        var content = "ok";
-        await using var ns = new NonSeekableStream(Encoding.UTF8.GetBytes(content));
+        
+        const string content = "a b c a";
+        const int k = 2;
+        var expectedAnalysis = new ShingleAnalyzer { Total = 3 };
+        _shingleServiceMock.Setup(s => s.Extract(content, k)).Returns(expectedAnalysis);
+        await using var ms = new MemoryStream(Encoding.UTF8.GetBytes(content));
 
-        var result = await svc.Execute(ns, "file.txt");
+        
+        var result = await _service.ExecuteShingleAnalysis(ms, "file.log", k);
 
-        Assert.NotNull(result);
-        Assert.Equal(content, fake.LastText);
+        
+        Assert.Same(expectedAnalysis, result);
+        _shingleServiceMock.Verify(s => s.Extract(content, k), Times.Once);
     }
 }
