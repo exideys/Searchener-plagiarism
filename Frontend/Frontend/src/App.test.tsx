@@ -132,7 +132,7 @@ test("analyzes text in WORDS mode and shows word frequency table", async () => {
   render(<App />);
 
   // мок на /text/analyze
-  mockFetchJsonOnce(<AnalyzeResponse>{
+  mockFetchJsonOnce({
     total: 4,
     counts: { hello: 2, world: 1, test: 1 },
     frequencies: {
@@ -140,7 +140,7 @@ test("analyzes text in WORDS mode and shows word frequency table", async () => {
       world: 0.25,
       test: 0.25,
     },
-  });
+  } as AnalyzeResponse);
 
   // вводим текст в верхнюю textarea (та, где placeholder = Paste text to analyze)
   const taAnalyze = screen.getByPlaceholderText(
@@ -152,8 +152,7 @@ test("analyzes text in WORDS mode and shows word frequency table", async () => {
     "hello hello world test"
   );
 
-  // режим WORDS по умолчанию уже выбран (radio checked)
-  // жмём Analyze text
+  // режим WORDS по умолчанию уже выбран
   const runBtn = screen.getByRole("button", {
     name: /Analyze text/i,
   });
@@ -208,12 +207,12 @@ test("analyzes text in SHINGLES mode with given k and step, shows shingles table
   await userEvent.type(stepInput, "2");
 
   // мок на /text/shingles
-  mockFetchJsonOnce(<ShinglesResponse>{
+  mockFetchJsonOnce({
     shingles: [
       "hello world test lol",
       "world test lol kek",
     ],
-  });
+  } as ShinglesResponse);
 
   // вводим текст
   const taAnalyze = screen.getByPlaceholderText(
@@ -283,12 +282,12 @@ test("uploads one file and shows its stats", async () => {
 
   // мок для /file/analyze
   mockFetchJsonOnce([
-    <FileAnalyzeItem>{
+    {
       fileName: "doc1.txt",
       total: 3,
       counts: { a: 2, b: 1 },
       frequencies: { a: 0.666, b: 0.333 },
-    },
+    } as FileAnalyzeItem,
   ]);
 
   // берём настоящий <input aria-label="Upload files">
@@ -322,18 +321,18 @@ test("uploads two files, can switch tabs, renders per-file stats", async () => {
 
   // мок для /file/analyze
   mockFetchJsonOnce([
-    <FileAnalyzeItem>{
+    {
       fileName: "f1.txt",
       total: 2,
       counts: { hi: 2 },
       frequencies: { hi: 1 },
-    },
-    <FileAnalyzeItem>{
+    } as FileAnalyzeItem,
+    {
       fileName: "f2.txt",
       total: 4,
       counts: { yo: 3, sup: 1 },
       frequencies: { yo: 0.75, sup: 0.25 },
-    },
+    } as FileAnalyzeItem,
   ]);
 
   const fileInput = screen.getByLabelText(/Upload files/i);
@@ -396,7 +395,7 @@ test("shows error if file analyze request fails", async () => {
 test("checks plagiarism for text and renders score + sources", async () => {
   render(<App />);
 
-  mockFetchJsonOnce(<PlagiarismResponse>{
+  mockFetchJsonOnce({
     score: 0.42,
     potentialSources: [
       {
@@ -408,7 +407,7 @@ test("checks plagiarism for text and renders score + sources", async () => {
         url: "https://example.com/b",
       },
     ],
-  });
+  } as PlagiarismResponse);
 
   // вводим текст в textarea с плейсхолдером "Paste text to check plagiarism"
   const taPlag = screen.getByPlaceholderText(
@@ -474,7 +473,7 @@ test("checks plagiarism for file and shows per-file result", async () => {
   render(<App />);
 
   mockFetchJsonOnce([
-    <FilePlagiarismItem>{
+    {
       fileName: "thesis.docx",
       score: 0.88,
       potentialSources: [
@@ -483,7 +482,7 @@ test("checks plagiarism for file and shows per-file result", async () => {
           url: "https://plagiat.example.edu/source1",
         },
       ],
-    },
+    } as FilePlagiarismItem,
   ]);
 
   const plagFileInput = screen.getByLabelText(
