@@ -420,7 +420,7 @@ function PlagiarismTable({
                   </td>
                   <td className="px-4 py-3 text-[13px] whitespace-pre-wrap break-words">
                     {src.matchedShingles && src.matchedShingles.length
-                      ? src.matchedShingles.join("\n• ")
+                      ? src.matchedShingles.join("\n")
                       : "(no exact shingles provided)"}
                   </td>
                 </tr>
