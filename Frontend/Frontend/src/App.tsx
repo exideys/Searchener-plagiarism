@@ -6,23 +6,37 @@ type AnalyzeResponse = {
   frequencies: Record<string, number>;
 };
 
-type ShinglesResponse = {
-  shingles: string[];
+type FileAnalyzeItem = AnalyzeResponse & { fileName?: string };
+
+type Row = { word: string; count: number; freq: number };
+
+type SourceMatchDto = {
+  matchedShingles: string[];
+  url: string;
 };
 
-type FileAnalyzeItem = AnalyzeResponse & { fileName?: string };
-type Row = { word: string; count: number; freq: number };
+type PlagiarismResponse = {
+  score: number;
+  potentialSources: SourceMatchDto[];
+};
+
+type FilePlagiarismItem = PlagiarismResponse & {
+  fileName?: string;
+};
 
 const API_URL = import.meta.env?.VITE_API_URL as string | undefined;
 
 const TEXT_ENDPOINT_WORDS = "/text/analyze";
 const TEXT_ENDPOINT_SHINGLES = "/text/shingles";
-
 const FILE_ENDPOINT_WORDS = "/file/analyze";
+const FILE_ENDPOINT_SHINGLES = "/file/shingles";
+const PLAINTEXT_PLAGIARISM_ENDPOINT = "/plagiarism/detect";
+const FILE_PLAGIARISM_ENDPOINT = "/plagiarism/detect/file";
+
+const DEFAULT_SHINGLE_SIZE = 5;
+const DEFAULT_SAMPLE_STEP = 2;
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
-
-/* ===================== type guards ===================== */
 
 function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
   if (typeof x !== "object" || x === null) return false;
@@ -32,109 +46,196 @@ function isAnalyzeResponse(x: unknown): x is AnalyzeResponse {
     frequencies?: unknown;
   };
   const totalOk = typeof r.total === "number";
-  const countsOk =
-    typeof r.counts === "object" && r.counts !== null;
-  const freqsOk =
-    typeof r.frequencies === "object" && r.frequencies !== null;
+  const countsOk = typeof r.counts === "object" && r.counts !== null;
+  const freqsOk = typeof r.frequencies === "object" && r.frequencies !== null;
   return totalOk && countsOk && freqsOk;
 }
 
-function isShinglesResponse(x: unknown): x is ShinglesResponse {
+function isPlagiarismResponse(x: unknown): x is PlagiarismResponse {
   if (typeof x !== "object" || x === null) return false;
-  const r = x as { shingles?: unknown };
-  if (!Array.isArray(r.shingles)) return false;
-  return r.shingles.every((item) => typeof item === "string");
+  const r = x as { score?: unknown; potentialSources?: unknown };
+  const scoreOk = typeof r.score === "number";
+  const arrOk =
+    Array.isArray(r.potentialSources) &&
+    r.potentialSources.every((s: any) => {
+      if (typeof s !== "object" || s === null) return false;
+      return (
+        Array.isArray(s.matchedShingles) &&
+        s.matchedShingles.every((m: any) => typeof m === "string") &&
+        typeof s.url === "string"
+      );
+    });
+  return scoreOk && arrOk;
 }
 
-function isFileAnalyzeArray(x: unknown): x is FileAnalyzeItem[] {
-  return Array.isArray(x) && x.every(isAnalyzeResponse);
-}
-
-function hasItemsArray(x: unknown): x is { items: FileAnalyzeItem[] } {
-  if (typeof x !== "object" || x === null) return false;
-  const r = x as { items?: unknown };
-  return Array.isArray(r.items) && (r.items as unknown[]).every(isAnalyzeResponse);
-}
-
-/* ======================== API calls ======================== */
-
-// анализ текста (слова ИЛИ шинглы)
 async function analyzeText(
   text: string,
   mode: "words" | "shingles",
   k: number,
   signal?: AbortSignal
-): Promise<AnalyzeResponse | ShinglesResponse> {
+): Promise<AnalyzeResponse> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
-
-  const endpoint =
-    mode === "shingles" ? TEXT_ENDPOINT_SHINGLES : TEXT_ENDPOINT_WORDS;
-
-  const body =
-    mode === "shingles"
-      ? { text, k } // ExtractShinglesRequest
-      : { text };   // AnalyzeTextRequest
-
+  const endpoint = mode === "shingles" ? TEXT_ENDPOINT_SHINGLES : TEXT_ENDPOINT_WORDS;
+  const body = mode === "shingles" ? { text, k } : { text };
   const res = await fetch(`${API_URL.replace(/\/$/, "")}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal,
   });
-
   if (!res.ok) {
-    throw new Error(
-      `API ${res.status}: ${await res.text().catch(() => res.statusText)}`
-    );
+    throw new Error(`API ${res.status}: ${await res.text().catch(() => res.statusText)}`);
   }
-
   const data: unknown = await res.json();
-
-  if (isShinglesResponse(data)) {
-    return data;
+  if (!isAnalyzeResponse(data)) {
+    throw new Error("Unexpected API response shape");
   }
-  if (isAnalyzeResponse(data)) {
-    return data;
-  }
-
-  // если пришло что-то кривое
-  throw new Error("Unexpected API response shape");
+  return data;
 }
 
-// анализ файлов (только words сейчас)
-async function analyzeFiles(
-  files: File[],
+async function analyzeSingleFileWords(
+  file: File,
   signal?: AbortSignal
-): Promise<FileAnalyzeItem[]> {
+): Promise<AnalyzeResponse> {
   if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
-
   const fd = new FormData();
-  for (const f of files) fd.append("file", f, f.name);
-
-  const res = await fetch(
-    `${API_URL.replace(/\/$/, "")}${FILE_ENDPOINT_WORDS}`,
-    {
-      method: "POST",
-      body: fd,
-      signal,
-    }
-  );
-
+  fd.append("file", file, file.name);
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}${FILE_ENDPOINT_WORDS}`, {
+    method: "POST",
+    body: fd,
+    signal,
+  });
   if (!res.ok) {
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${msg}`);
   }
-
   const data: unknown = await res.json();
-
-  if (isFileAnalyzeArray(data)) return data;
-  if (hasItemsArray(data)) return data.items;
-  if (isAnalyzeResponse(data)) return [data];
-
-  throw new Error("Unexpected API response shape");
+  if (!isAnalyzeResponse(data)) {
+    throw new Error("Unexpected API response shape");
+  }
+  return data;
 }
 
-/* ======================== UI bits ======================== */
+async function analyzeSingleFileShingles(
+  file: File,
+  k: number,
+  signal?: AbortSignal
+): Promise<AnalyzeResponse> {
+  if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  fd.append("k", String(k));
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}${FILE_ENDPOINT_SHINGLES}`, {
+    method: "POST",
+    body: fd,
+    signal,
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => res.statusText);
+    throw new Error(`API ${res.status}: ${msg}`);
+  }
+  const data: unknown = await res.json();
+  if (!isAnalyzeResponse(data)) {
+    throw new Error("Unexpected API response shape");
+  }
+  return data;
+}
+
+async function analyzeFiles(
+  files: File[],
+  mode: "words" | "shingles",
+  k: number,
+  signal?: AbortSignal
+): Promise<FileAnalyzeItem[]> {
+  const results: FileAnalyzeItem[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const r =
+      mode === "shingles"
+        ? await analyzeSingleFileShingles(f, k, signal)
+        : await analyzeSingleFileWords(f, signal);
+    results.push({
+      fileName: f.name || `File ${i + 1}`,
+      total: r.total,
+      counts: r.counts,
+      frequencies: r.frequencies,
+    });
+  }
+  return results;
+}
+
+async function detectPlagiarismText(
+  text: string,
+  signal?: AbortSignal
+): Promise<PlagiarismResponse> {
+  if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
+  const res = await fetch(
+    `${API_URL.replace(/\/$/, "")}${PLAINTEXT_PLAGIARISM_ENDPOINT}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        shingleSize: DEFAULT_SHINGLE_SIZE,
+        sampleStep: DEFAULT_SAMPLE_STEP,
+      }),
+      signal,
+    }
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Plagiarism API ${res.status}: ${await res.text().catch(() => res.statusText)}`
+    );
+  }
+  const data: unknown = await res.json();
+  if (isPlagiarismResponse(data)) return data;
+  return { score: 0, potentialSources: [] };
+}
+
+async function detectPlagiarismFiles(
+  files: File[],
+  signal?: AbortSignal
+): Promise<FilePlagiarismItem[]> {
+  if (!API_URL) throw new Error("VITE_API_URL is not set (.env).");
+  const results: FilePlagiarismItem[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const fd = new FormData();
+    fd.append("file", f, f.name);
+    fd.append("shingleSize", String(DEFAULT_SHINGLE_SIZE));
+    fd.append("sampleStep", String(DEFAULT_SAMPLE_STEP));
+
+    const res = await fetch(
+      `${API_URL.replace(/\/$/, "")}${FILE_PLAGIARISM_ENDPOINT}`,
+      {
+        method: "POST",
+        body: fd,
+        signal,
+      }
+    );
+
+    if (!res.ok) {
+      const msg = await res.text().catch(() => res.statusText);
+      throw new Error(`Plagiarism API ${res.status}: ${msg}`);
+    }
+
+    const data: unknown = await res.json();
+    if (isPlagiarismResponse(data)) {
+      results.push({
+        fileName: f.name || `File ${i + 1}`,
+        score: data.score,
+        potentialSources: data.potentialSources,
+      });
+    } else {
+      results.push({
+        fileName: f.name || `File ${i + 1}`,
+        score: 0,
+        potentialSources: [],
+      });
+    }
+  }
+  return results;
+}
 
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
@@ -187,13 +288,21 @@ function ResultsTable({
     });
   }, [data, sortKey, dir]);
 
-  const HeaderBtn = ({ label, k }: { label: string; k: typeof sortKey }) => (
+  const HeaderBtn = ({
+    label,
+    k,
+  }: {
+    label: string;
+    k: typeof sortKey;
+  }) => (
     <button
       className={`text-left w-full font-semibold ${
         sortKey === k ? "text-indigo-700" : "text-gray-700"
       }`}
       onClick={() =>
-        sortKey === k ? setDir((d) => (d === "asc" ? "desc" : "asc")) : setSortKey(k)
+        sortKey === k
+          ? setDir((d) => (d === "asc" ? "desc" : "asc"))
+          : setSortKey(k)
       }
       title="Sort"
     >
@@ -210,7 +319,7 @@ function ResultsTable({
     <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
       <div className="px-4 pt-4 pb-2 flex items-center gap-2">
         <h3 className="text-base font-semibold">{title ?? "Results"}</h3>
-        <StatBadge label="Total words" value={String(data.total)} />
+        <StatBadge label="Total tokens" value={String(data.total)} />
         <StatBadge
           label="Unique"
           value={String(Object.keys(data.counts).length)}
@@ -222,7 +331,7 @@ function ResultsTable({
           <thead className="bg-gray-50 border-y">
             <tr>
               <th className="px-4 py-3 w-[50%]">
-                <HeaderBtn label="Word" k="word" />
+                <HeaderBtn label="Token / Shingle" k="word" />
               </th>
               <th className="px-4 py-3 w-[25%]">
                 <HeaderBtn label="Count" k="count" />
@@ -252,10 +361,7 @@ function ResultsTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td
-                  className="px-4 py-6 text-gray-500 text-sm"
-                  colSpan={3}
-                >
+                <td className="px-4 py-6 text-gray-500 text-sm" colSpan={3}>
                   No data
                 </td>
               </tr>
@@ -267,59 +373,133 @@ function ResultsTable({
   );
 }
 
-function ShinglesTable({
+function PlagiarismTable({
   data,
   title,
 }: {
-  data: ShinglesResponse;
+  data: PlagiarismResponse;
   title?: string;
 }) {
   return (
     <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
-      <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+      <div className="px-4 pt-4 pb-2 flex items-center gap-2 flex-wrap">
         <h3 className="text-base font-semibold">
-          {title ?? "Shingles Result"}
+          {title ?? "Plagiarism check"}
         </h3>
-        <StatBadge label="Total shingles" value={String(data.shingles.length)} />
+        <StatBadge
+          label="Sources"
+          value={String(data.potentialSources.length)}
+        />
+        <StatBadge label="Score" value={pct(data.score)} />
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-y">
             <tr>
-              <th className="px-4 py-3 w-[80px] text-left font-semibold text-gray-700">
+              <th className="px-4 py-3 text-left font-semibold text-gray-700 w-[60px]">
                 #
               </th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700 w-[200px]">
+                Source URL
+              </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                Shingle
+                Matched shingles
               </th>
             </tr>
           </thead>
           <tbody>
-            {data.shingles.length > 0 ? (
-              data.shingles.map((s, i) => (
+            {data.potentialSources.length ? (
+              data.potentialSources.map((src, i) => (
                 <tr key={i} className="border-b last:border-0 align-top">
-                  <td className="px-4 py-3 text-gray-500 tabular-nums w-[80px]">
+                  <td className="px-4 py-3 text-gray-500 tabular-nums">
                     {i + 1}
                   </td>
-                  <td className="px-4 py-3 font-mono text-[13px] whitespace-pre-wrap break-words">
-                    {s}
+                  <td className="px-4 py-3 break-words text-[13px] text-indigo-700">
+                    {src.url}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] whitespace-pre-wrap break-words">
+                    {src.matchedShingles && src.matchedShingles.length
+                      ? src.matchedShingles.join("\n• ")
+                      : "(no exact shingles provided)"}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td
-                  className="px-4 py-6 text-gray-500 text-sm"
-                  colSpan={2}
-                >
-                  No shingles
+                <td className="px-4 py-6 text-gray-500 text-sm" colSpan={3}>
+                  No plagiarism detected
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function FilePlagiarismBlock({ results }: { results: FilePlagiarismItem[] }) {
+  const [tab, setTab] = useState(0);
+
+  if (!results.length) return null;
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap gap-2">
+        {results.map((it, i) => (
+          <button
+            key={i}
+            onClick={() => setTab(i)}
+            className={`px-3 py-1.5 rounded-xl border text-sm ${
+              tab === i
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white hover:bg-gray-50"
+            }`}
+          >
+            {it.fileName || `File ${i + 1}`}
+          </button>
+        ))}
+      </div>
+
+      <PlagiarismTable
+        data={{
+          score: results[tab].score,
+          potentialSources: results[tab].potentialSources,
+        }}
+        title={`Plagiarism — ${results[tab].fileName || `File ${tab + 1}`}`}
+      />
+    </div>
+  );
+}
+
+function FileResultsBlock({ results }: { results: FileAnalyzeItem[] }) {
+  const [tab, setTab] = useState(0);
+
+  if (!results.length) return null;
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap gap-2">
+        {results.map((it, i) => (
+          <button
+            key={i}
+            onClick={() => setTab(i)}
+            className={`px-3 py-1.5 rounded-xl border text-sm ${
+              tab === i
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white hover:bg-gray-50"
+            }`}
+          >
+            {it.fileName || `File ${i + 1}`}
+          </button>
+        ))}
+      </div>
+
+      <ResultsTable
+        data={results[tab]}
+        title={`Results — ${results[tab].fileName || `File ${tab + 1}`}`}
+      />
     </div>
   );
 }
@@ -377,30 +557,22 @@ function FileDrop({
   );
 }
 
-/* ======================== main component ======================== */
-
 export default function App() {
   const [text, setText] = useState("");
 
-  const [textResultWords, setTextResultWords] = useState<AnalyzeResponse | null>(
-    null
-  );
-  const [textResultShingles, setTextResultShingles] =
-    useState<ShinglesResponse | null>(null);
-
-  const [fileResults, setFileResults] = useState<FileAnalyzeItem[] | null>(
-    null
-  );
-  const [activeFileTab, setActiveFileTab] = useState(0);
+  const [textResult, setTextResult] = useState<AnalyzeResponse | null>(null);
+  const [textPlagiarism, setTextPlagiarism] = useState<PlagiarismResponse | null>(null);
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  const [fileResults, setFileResults] = useState<FileAnalyzeItem[] | null>(null);
+  const [filePlagiarism, setFilePlagiarism] = useState<FilePlagiarismItem[] | null>(null);
 
   const [loading, setLoading] = useState<"text" | "files" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const [analyzeMode, setAnalyzeMode] = useState<"words" | "shingles">(
-    "words"
-  );
+  const [textMode, setTextMode] = useState<"words" | "shingles">("words");
+  const [fileMode, setFileMode] = useState<"words" | "shingles">("words");
 
   const [k, setK] = useState<number>(3);
 
@@ -411,19 +583,20 @@ export default function App() {
     setErr(null);
     setLoading("text");
 
+    setTextResult(null);
+    setTextPlagiarism(null);
+
     setFileResults(null);
-    setTextResultWords(null);
-    setTextResultShingles(null);
+    setFilePlagiarism(null);
 
     try {
       const ctrl = new AbortController();
-      const resp = await analyzeText(value, analyzeMode, k, ctrl.signal);
 
-      if (isShinglesResponse(resp)) {
-        setTextResultShingles(resp);
-      } else {
-        setTextResultWords(resp);
-      }
+      const stats = await analyzeText(value, textMode, k, ctrl.signal);
+      setTextResult(stats);
+
+      const plag = await detectPlagiarismText(value, ctrl.signal);
+      setTextPlagiarism(plag);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(msg || "API error");
@@ -438,26 +611,23 @@ export default function App() {
     setErr(null);
     setLoading("files");
 
-    setTextResultWords(null);
-    setTextResultShingles(null);
+    setTextResult(null);
+    setTextPlagiarism(null);
+
+    setFileResults(null);
+    setFilePlagiarism(null);
 
     try {
       const ctrl = new AbortController();
-      const items = await analyzeFiles(pendingFiles, ctrl.signal);
 
-      const itemsWithNames = items.map((it, i) => ({
-        fileName: it.fileName || pendingFiles[i]?.name || `File ${i + 1}`,
-        total: it.total,
-        counts: it.counts,
-        frequencies: it.frequencies,
-      }));
+      const analyzeds = await analyzeFiles(pendingFiles, fileMode, k, ctrl.signal);
+      setFileResults(analyzeds);
 
-      setFileResults(itemsWithNames);
-      setActiveFileTab(0);
+      const plagItems = await detectPlagiarismFiles(pendingFiles, ctrl.signal);
+      setFilePlagiarism(plagItems);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(msg || "API error");
-      setFileResults(null);
     } finally {
       setLoading(null);
     }
@@ -471,14 +641,11 @@ export default function App() {
             <div className="w-7 h-7 rounded-lg bg-indigo-600" />
             <h1 className="text-lg font-bold">Text Analysis</h1>
           </div>
-          <div className="text-xs text-gray-500">
-            API: {API_URL || "not set"}
-          </div>
+          <div className="text-xs text-gray-500">API: {API_URL || "not set"}</div>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 grid gap-6">
-        {/* TEXT CARD */}
         <div className="bg-white border rounded-2xl p-4 shadow-sm">
           <label className="block text-sm font-semibold mb-2">
             Paste text to analyze
@@ -495,16 +662,15 @@ export default function App() {
             <div className="text-xs text-gray-700 flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
               <div className="text-gray-500">Characters: {text.length}</div>
 
-              {/* режим анализа */}
               <label className="flex items-center gap-1">
                 <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
                   Mode
                 </span>
                 <select
                   className="border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={analyzeMode}
+                  value={textMode}
                   onChange={(e) =>
-                    setAnalyzeMode(
+                    setTextMode(
                       e.target.value === "shingles" ? "shingles" : "words"
                     )
                   }
@@ -514,7 +680,7 @@ export default function App() {
                 </select>
               </label>
 
-              {analyzeMode === "shingles" && (
+              {textMode === "shingles" && (
                 <label className="flex items-center gap-1">
                   <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
                     Step k
@@ -546,58 +712,106 @@ export default function App() {
           </div>
         </div>
 
-        {/* FILES CARD */}
         <div className="bg-white border rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-semibold">Analyze files (words)</div>
-            <div className="text-xs text-gray-500">
-              Selected: {pendingFiles.length || 0}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between flex-col sm:flex-row sm:items-center">
+              <div className="text-sm font-semibold">
+                Analyze files ({fileMode})
+              </div>
+              <div className="text-xs text-gray-500">
+                Selected: {pendingFiles.length || 0}
+              </div>
             </div>
-          </div>
 
-          <FileDrop
-            disabled={loading !== null}
-            onFilesSelected={(files) =>
-              setPendingFiles((prev) => [...prev, ...files])
-            }
-          />
-
-          {!!pendingFiles.length && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {pendingFiles.map((f, i) => (
-                <div
-                  key={i}
-                  className="text-xs px-2 py-1 rounded-lg border bg-gray-50 flex items-center gap-2"
-                  title={`${f.name} (${f.type || "unknown"}, ${f.size} bytes)`}
+            <div className="text-xs text-gray-700 flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+              <label className="flex items-center gap-1">
+                <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
+                  Mode
+                </span>
+                <select
+                  className="border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={fileMode}
+                  onChange={(e) =>
+                    setFileMode(
+                      e.target.value === "shingles" ? "shingles" : "words"
+                    )
+                  }
+                  disabled={loading !== null}
                 >
-                  <span className="truncate max-w-[220px]">{f.name}</span>
-                  <button
-                    className="px-1 rounded hover:bg-gray-200"
-                    onClick={() =>
-                      setPendingFiles((prev) =>
-                        prev.filter((_, idx) => idx !== i)
-                      )
-                    }
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                  <option value="words">Words</option>
+                  <option value="shingles">Shingles</option>
+                </select>
+              </label>
 
-              <button
-                className="ml-auto inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-500 transition"
-                onClick={runFilesAnalyze}
-                disabled={!pendingFiles.length || loading !== null}
-              >
-                Analyze file{pendingFiles.length > 1 ? "s" : ""}
-              </button>
+              {fileMode === "shingles" && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
+                    Step k
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-16 border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={k}
+                    disabled={loading !== null}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      setK(!Number.isNaN(v) && v > 0 ? v : 1);
+                    }}
+                  />
+                </label>
+              )}
             </div>
-          )}
+
+            <FileDrop
+              disabled={loading !== null}
+              onFilesSelected={(files) =>
+                setPendingFiles((prev) => [...prev, ...files])
+              }
+            />
+
+            {!!pendingFiles.length && (
+              <div className="flex flex-wrap gap-2">
+                {pendingFiles.map((f, i) => (
+                  <div
+                    key={i}
+                    className="text-xs px-2 py-1 rounded-lg border bg-gray-50 flex items-center gap-2"
+                    title={`${f.name} (${f.type || "unknown"}, ${f.size} bytes)`}
+                  >
+                    <span className="truncate max-w-[220px]">{f.name}</span>
+                    <button
+                      className="px-1 rounded hover:bg-gray-200"
+                      onClick={() =>
+                        setPendingFiles((prev) =>
+                          prev.filter((_, idx) => idx !== i)
+                        )
+                      }
+                      disabled={loading !== null}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  className="ml-auto inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-500 transition"
+                  onClick={runFilesAnalyze}
+                  disabled={!pendingFiles.length || loading !== null}
+                >
+                  Analyze file
+                  {pendingFiles.length > 1 ? "s" : ""}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* LOADING / ERROR */}
-        {loading === "text" && <Loader label="Analyzing text…" />}
-        {loading === "files" && <Loader label="Analyzing files…" />}
+        {loading === "text" && (
+          <Loader label="Analyzing text & plagiarism…" />
+        )}
+        {loading === "files" && (
+          <Loader label="Analyzing files & plagiarism…" />
+        )}
 
         {err && (
           <div className="p-4 rounded-xl border bg-red-50 text-red-700 text-sm">
@@ -605,45 +819,23 @@ export default function App() {
           </div>
         )}
 
-        {/* RESULTS TEXT (words) */}
-        {!loading && textResultWords && (
-          <ResultsTable data={textResultWords} />
+        {!loading && textResult && (
+          <ResultsTable data={textResult} />
         )}
 
-        {/* RESULTS TEXT (shingles) */}
-        {!loading && textResultShingles && (
-          <ShinglesTable data={textResultShingles} />
+        {!loading && textPlagiarism && (
+          <PlagiarismTable
+            data={textPlagiarism}
+            title="Plagiarism — text"
+          />
         )}
 
-        {/* RESULTS FILES */}
         {!loading && fileResults && !!fileResults.length && (
-          <div className="grid gap-3">
-            {/* файлы-табы */}
-            <div className="flex flex-wrap gap-2">
-              {fileResults.map((it, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveFileTab(i)}
-                  className={`px-3 py-1.5 rounded-xl border text-sm ${
-                    activeFileTab === i
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white hover:bg-gray-50"
-                  }`}
-                >
-                  {it.fileName || `File ${i + 1}`}
-                </button>
-              ))}
-            </div>
+          <FileResultsBlock results={fileResults} />
+        )}
 
-            {/* активный файл */}
-            <ResultsTable
-              data={fileResults[activeFileTab]}
-              title={`Results — ${
-                fileResults[activeFileTab].fileName ||
-                `File ${activeFileTab + 1}`
-              }`}
-            />
-          </div>
+        {!loading && filePlagiarism && !!filePlagiarism.length && (
+          <FilePlagiarismBlock results={filePlagiarism} />
         )}
       </main>
     </div>
