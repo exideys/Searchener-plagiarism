@@ -1,14 +1,31 @@
-import {
-  describe,
-  test,
-  expect,
-  beforeEach,
-  afterEach,
-  vi,
-} from "vitest";
+import { test, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
+
+type AnalyzeResponse = {
+  total: number;
+  counts: Record<string, number>;
+  frequencies: Record<string, number>;
+};
+
+type ShinglesResponse = {
+  shingles: string[];
+};
+
+type FileAnalyzeItem = AnalyzeResponse & { fileName?: string };
+
+type PlagiarismResponse = {
+  score: number;
+  potentialSources: Array<{
+    matchedShingles: string[];
+    url: string;
+  }>;
+};
+
+type FilePlagiarismItem = PlagiarismResponse & { fileName?: string };
+
+// -------------------- env mock --------------------
 
 beforeEach(() => {
   Object.defineProperty(import.meta, "env", {
@@ -21,554 +38,498 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("App", () => {
-  test("renders main UI blocks and controls", () => {
-    render(<App />);
+// -------------------- helpers --------------------
 
-    expect(screen.getByText(/Text Analysis/i)).toBeInTheDocument();
-    expect(screen.getByText(/Paste text to analyze/i)).toBeInTheDocument();
-    expect(screen.getByText(/Analyze files \(words\)/i)).toBeInTheDocument();
+function mockFetchJsonOnce(
+  body: unknown,
+  init?: { status?: number }
+): vi.Mock {
+  const status = init?.status ?? 200;
+  const res = new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+  return vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(res);
+}
 
-    const defaultModeSelect = screen.getAllByDisplayValue(/words/i)[0];
-    expect(defaultModeSelect).toBeInTheDocument();
+function mockFetchTextErrorOnce(status: number, text: string): vi.Mock {
+  const res = new Response(text, {
+    status,
+    headers: { "Content-Type": "text/plain" },
+  });
+  return vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(res);
+}
 
-    expect(screen.queryByText(/Step k/i)).not.toBeInTheDocument();
+// -------------------- smoke / layout --------------------
+
+test("renders all main blocks from App layout", () => {
+  render(<App />);
+
+  // блок анализа текста
+  expect(
+    screen.getByText(/Text Analysis: Unique Words/i)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Paste text to analyze/i)
+  ).toBeInTheDocument();
+
+  // элементы режима WORDS / SHINGLES
+  expect(
+    screen.getByLabelText(/Words mode/i)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByLabelText(/Shingles mode/i)
+  ).toBeInTheDocument();
+
+  // поля параметров шинглов
+  expect(
+    screen.getByLabelText(/Shingle size/i)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByLabelText(/Sample step/i)
+  ).toBeInTheDocument();
+
+  // кнопка анализа текста
+  expect(
+    screen.getByRole("button", { name: /Analyze text/i })
+  ).toBeInTheDocument();
+
+  // блок анализа файлов
+  expect(
+    screen.getByText(/Analyze files/i)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByLabelText(/Upload files/i)
+  ).toBeInTheDocument();
+
+  // блок плагиата
+  expect(
+    screen.getByText(/Plagiarism Check/i)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Check plagiarism for text/i)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Check plagiarism for file/i)
+  ).toBeInTheDocument();
+
+  // кнопка проверки плагиата текста
+  expect(
+    screen.getByRole("button", {
+      name: /Check text plagiarism/i,
+    })
+  ).toBeInTheDocument();
+
+  // текстовая textarea для плагиата
+  expect(
+    screen.getByPlaceholderText(/Paste text to check plagiarism/i)
+  ).toBeInTheDocument();
+});
+
+// -------------------- text analyze: WORDS --------------------
+
+test("analyzes text in WORDS mode and shows word frequency table", async () => {
+  render(<App />);
+
+  // мок на /text/analyze
+  mockFetchJsonOnce(<AnalyzeResponse>{
+    total: 4,
+    counts: { hello: 2, world: 1, test: 1 },
+    frequencies: {
+      hello: 0.5,
+      world: 0.25,
+      test: 0.25,
+    },
   });
 
-  test("analyzes text in WORDS mode and shows frequency table + plagiarism table", async () => {
-    const analyzePayload = {
-      total: 3,
-      counts: { hello: 1, world: 2 },
-      frequencies: { hello: 1 / 3, world: 2 / 3 },
-    };
+  // вводим текст в верхнюю textarea (та, где placeholder = Paste text to analyze)
+  const taAnalyze = screen.getByPlaceholderText(
+    /Paste text to analyze/i
+  );
+  await userEvent.clear(taAnalyze);
+  await userEvent.type(
+    taAnalyze,
+    "hello hello world test"
+  );
 
-    const plagiarismPayload = {
-      score: 0.42,
-      potentialSources: [
-        {
-          matchedShingles: ["hello world", "world world"],
-          url: "http://example.com/src1",
-        },
-      ],
-    };
+  // режим WORDS по умолчанию уже выбран (radio checked)
+  // жмём Analyze text
+  const runBtn = screen.getByRole("button", {
+    name: /Analyze text/i,
+  });
+  await userEvent.click(runBtn);
 
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(analyzePayload), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(plagiarismPayload), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
+  // ждём рендер таблицы
+  await waitFor(() => {
+    // заголовок Total tokens и значение
+    expect(
+      screen.getByText(/Total tokens/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
 
-    render(<App />);
+    // находим таблицу слов
+    const table = screen.getByRole("table");
+    expect(table).toBeInTheDocument();
 
-    await userEvent.type(
-      screen.getByPlaceholderText(/type or paste text here/i),
-      "hello world world"
+    // проверяем что есть строка для "hello"
+    const rows = within(table).getAllByRole("row");
+    const helloRow = rows.find((row) =>
+      within(row).queryByText("hello")
     );
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /analyze text/i })
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("hello")).toBeInTheDocument();
-      expect(screen.getByText("world")).toBeInTheDocument();
-      expect(screen.getByText(/Total tokens/i)).toBeInTheDocument();
-      expect(screen.getByText("3")).toBeInTheDocument();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/Plagiarism — text/i)).toBeInTheDocument();
-      expect(screen.getByText(/Sources/i)).toBeInTheDocument();
-      expect(screen.getByText(/Score/i)).toBeInTheDocument();
+    expect(helloRow).toBeTruthy();
+    if (helloRow) {
       expect(
-        screen.getByText(/http:\/\/example\.com\/src1/i)
+        within(helloRow).getByText("2")
       ).toBeInTheDocument();
-    });
+      expect(
+        within(helloRow).getByText(/50\.0%/)
+      ).toBeInTheDocument();
+    }
+  });
+});
 
-    expect(spy).toHaveBeenCalledTimes(2);
+// -------------------- text analyze: SHINGLES --------------------
 
-    const call0 = spy.mock.calls[0] as [string, RequestInit];
-    const urlAnalyze = call0[0];
-    const optsAnalyze = call0[1];
+test("analyzes text in SHINGLES mode with given k and step, shows shingles table", async () => {
+  render(<App />);
 
-    expect(urlAnalyze).toMatch(/\/text\/analyze$/);
+  // переключаем radio на SHINGLES
+  const shinglesRadio = screen.getByLabelText(/Shingles mode/i);
+  await userEvent.click(shinglesRadio);
 
-    const headersAnalyze = optsAnalyze
-      .headers as Record<string, unknown>;
-    expect(headersAnalyze["Content-Type"]).toBe("application/json");
+  // задаём Shingle size
+  const sizeInput = screen.getByLabelText(/Shingle size/i);
+  await userEvent.clear(sizeInput);
+  await userEvent.type(sizeInput, "4");
 
-    const sentBodyAnalyze = JSON.parse(
-      optsAnalyze.body as string
-    ) as Record<string, unknown>;
-    expect(sentBodyAnalyze).toMatchObject({
-      text: "hello world world",
-    });
+  // задаём Sample step
+  const stepInput = screen.getByLabelText(/Sample step/i);
+  await userEvent.clear(stepInput);
+  await userEvent.type(stepInput, "2");
 
-    const call1 = spy.mock.calls[1] as [string, RequestInit];
-    const urlPlag = call1[0];
-    const optsPlag = call1[1];
-
-    expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
-
-    const sentBodyPlag = JSON.parse(
-      optsPlag.body as string
-    ) as Record<string, unknown>;
-    expect(sentBodyPlag).toMatchObject({
-      text: "hello world world",
-      shingleSize: 5,
-      sampleStep: 2,
-    });
+  // мок на /text/shingles
+  mockFetchJsonOnce(<ShinglesResponse>{
+    shingles: [
+      "hello world test lol",
+      "world test lol kek",
+    ],
   });
 
-  test("analyzes text in SHINGLES mode and sends correct request bodies", async () => {
-    const analyzePayload = {
+  // вводим текст
+  const taAnalyze = screen.getByPlaceholderText(
+    /Paste text to analyze/i
+  );
+  await userEvent.clear(taAnalyze);
+  await userEvent.type(
+    taAnalyze,
+    "hello world test lol kek"
+  );
+
+  // нажимаем Analyze text
+  const runBtn = screen.getByRole("button", {
+    name: /Analyze text/i,
+  });
+  await userEvent.click(runBtn);
+
+  // проверяем вывод
+  await waitFor(() => {
+    expect(
+      screen.getByText(/Generated shingles/i)
+    ).toBeInTheDocument();
+
+    // таблица с шинглами
+    const table = screen.getByRole("table");
+    expect(table).toBeInTheDocument();
+
+    expect(
+      within(table).getByText("hello world test lol")
+    ).toBeInTheDocument();
+  });
+});
+
+// -------------------- text analyze error --------------------
+
+test("shows API error from text analysis request", async () => {
+  render(<App />);
+
+  // мок с ошибкой
+  mockFetchTextErrorOnce(500, "Server exploded");
+
+  // ввод текста
+  const taAnalyze = screen.getByPlaceholderText(
+    /Paste text to analyze/i
+  );
+  await userEvent.clear(taAnalyze);
+  await userEvent.type(taAnalyze, "abc");
+
+  // клик по Analyze text
+  const runBtn = screen.getByRole("button", {
+    name: /Analyze text/i,
+  });
+  await userEvent.click(runBtn);
+
+  // ждём текст ошибки
+  await waitFor(() => {
+    expect(
+      screen.getByText(/Server exploded/i)
+    ).toBeInTheDocument();
+  });
+});
+
+// -------------------- file analyze upload --------------------
+
+test("uploads one file and shows its stats", async () => {
+  render(<App />);
+
+  // мок для /file/analyze
+  mockFetchJsonOnce([
+    <FileAnalyzeItem>{
+      fileName: "doc1.txt",
+      total: 3,
+      counts: { a: 2, b: 1 },
+      frequencies: { a: 0.666, b: 0.333 },
+    },
+  ]);
+
+  // берём настоящий <input aria-label="Upload files">
+  const fileInput = screen.getByLabelText(/Upload files/i);
+
+  // создаём фейковый файл
+  const file = new File(["a a b"], "doc1.txt", {
+    type: "text/plain",
+  });
+
+  // загружаем
+  await userEvent.upload(fileInput, file);
+
+  // ждём таб и таблицу токенов для файла
+  await waitFor(() => {
+    // должна появиться вкладка c именем файла
+    expect(
+      screen.getByRole("tab", { name: /doc1.txt/i })
+    ).toBeInTheDocument();
+
+    // метрика total tokens
+    expect(
+      screen.getByText(/Total tokens/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+});
+
+test("uploads two files, can switch tabs, renders per-file stats", async () => {
+  render(<App />);
+
+  // мок для /file/analyze
+  mockFetchJsonOnce([
+    <FileAnalyzeItem>{
+      fileName: "f1.txt",
+      total: 2,
+      counts: { hi: 2 },
+      frequencies: { hi: 1 },
+    },
+    <FileAnalyzeItem>{
+      fileName: "f2.txt",
       total: 4,
-      counts: {
-        "hello world test lol": 1,
-        "world test lol X": 1,
+      counts: { yo: 3, sup: 1 },
+      frequencies: { yo: 0.75, sup: 0.25 },
+    },
+  ]);
+
+  const fileInput = screen.getByLabelText(/Upload files/i);
+
+  const f1 = new File(["hi hi"], "f1.txt", {
+    type: "text/plain",
+  });
+  const f2 = new File(["yo yo yo sup"], "f2.txt", {
+    type: "text/plain",
+  });
+
+  await userEvent.upload(fileInput, [f1, f2]);
+
+  // обе вкладки должны появиться
+  await waitFor(() => {
+    expect(
+      screen.getByRole("tab", { name: /f1.txt/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /f2.txt/i })
+    ).toBeInTheDocument();
+  });
+
+  // по умолчанию активна первая вкладка -> total tokens = 2 видно
+  expect(screen.getByText("2")).toBeInTheDocument();
+
+  // переключаемся на вторую вкладку
+  const tab2 = screen.getByRole("tab", { name: /f2.txt/i });
+  await userEvent.click(tab2);
+
+  // теперь должны увидеть total tokens = 4
+  await waitFor(() => {
+    expect(screen.getByText("4")).toBeInTheDocument();
+  });
+});
+
+test("shows error if file analyze request fails", async () => {
+  render(<App />);
+
+  // мок ошибки для /file/analyze
+  mockFetchTextErrorOnce(500, "Broken upload");
+
+  const fileInput = screen.getByLabelText(/Upload files/i);
+
+  const file = new File(["xxx"], "bad.txt", {
+    type: "text/plain",
+  });
+
+  await userEvent.upload(fileInput, file);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(/Broken upload/i)
+    ).toBeInTheDocument();
+  });
+});
+
+// -------------------- plagiarism text --------------------
+
+test("checks plagiarism for text and renders score + sources", async () => {
+  render(<App />);
+
+  mockFetchJsonOnce(<PlagiarismResponse>{
+    score: 0.42,
+    potentialSources: [
+      {
+        matchedShingles: ["lorem ipsum dolor sit"],
+        url: "https://example.com/a",
       },
-      frequencies: {
-        "hello world test lol": 0.5,
-        "world test lol X": 0.5,
+      {
+        matchedShingles: ["hello world test lol"],
+        url: "https://example.com/b",
       },
-    };
+    ],
+  });
 
-    const plagiarismPayload = {
-      score: 0.9,
+  // вводим текст в textarea с плейсхолдером "Paste text to check plagiarism"
+  const taPlag = screen.getByPlaceholderText(
+    /Paste text to check plagiarism/i
+  );
+  await userEvent.clear(taPlag);
+  await userEvent.type(
+    taPlag,
+    "lorem ipsum dolor sit amet hello world test lol"
+  );
+
+  // жмём кнопку "Check text plagiarism"
+  const btn = screen.getByRole("button", {
+    name: /Check text plagiarism/i,
+  });
+  await userEvent.click(btn);
+
+  // проверяем вывод
+  await waitFor(() => {
+    expect(
+      screen.getByText(/Plagiarism score/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/42%/)
+    ).toBeInTheDocument();
+
+    // ссылки-источники
+    expect(
+      screen.getByText(/example\.com\/a/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/example\.com\/b/i)
+    ).toBeInTheDocument();
+  });
+});
+
+test("shows plagiarism error for text if request fails", async () => {
+  render(<App />);
+
+  mockFetchTextErrorOnce(500, "plag service down");
+
+  const taPlag = screen.getByPlaceholderText(
+    /Paste text to check plagiarism/i
+  );
+  await userEvent.clear(taPlag);
+  await userEvent.type(taPlag, "blah blah blah");
+
+  const btn = screen.getByRole("button", {
+    name: /Check text plagiarism/i,
+  });
+  await userEvent.click(btn);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(/plag service down/i)
+    ).toBeInTheDocument();
+  });
+});
+
+// -------------------- plagiarism file --------------------
+
+test("checks plagiarism for file and shows per-file result", async () => {
+  render(<App />);
+
+  mockFetchJsonOnce([
+    <FilePlagiarismItem>{
+      fileName: "thesis.docx",
+      score: 0.88,
       potentialSources: [
         {
-          matchedShingles: ["hello world test lol"],
-          url: "http://copycat.net/a",
+          matchedShingles: ["very suspicious fragment"],
+          url: "https://plagiat.example.edu/source1",
         },
       ],
-    };
+    },
+  ]);
 
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(analyzePayload), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(plagiarismPayload), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
+  const plagFileInput = screen.getByLabelText(
+    /Upload file to check plagiarism/i
+  );
 
-    render(<App />);
+  const thesis = new File(
+    ["very suspicious fragment"],
+    "thesis.docx",
+    {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+  );
 
-    await userEvent.type(
-      screen.getByPlaceholderText(/type or paste text here/i),
-      "hello world test lol"
-    );
+  await userEvent.upload(plagFileInput, thesis);
 
-    const selects = screen.getAllByDisplayValue(/words/i);
-    const textModeSelect = selects[0];
-    await userEvent.selectOptions(textModeSelect, "shingles");
+  await waitFor(() => {
+    expect(
+      screen.getByText(/thesis\.docx/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/88%/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/plagiat\.example\.edu\/source1/i)
+    ).toBeInTheDocument();
+  });
+});
 
-    const kInput = screen.getByLabelText(/Step k/i);
-    await userEvent.clear(kInput);
-    await userEvent.type(kInput, "4");
+test("shows plagiarism file error if request fails", async () => {
+  render(<App />);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /analyze text/i })
-    );
+  mockFetchTextErrorOnce(500, "file plagiarism failed");
 
-    await waitFor(() => {
-      expect(screen.getByText(/Total tokens/i)).toBeInTheDocument();
-    });
-
-    expect(spy).toHaveBeenCalledTimes(2);
-
-    const call0 = spy.mock.calls[0] as [string, RequestInit];
-    const urlAnalyze = call0[0];
-    const optsAnalyze = call0[1];
-
-    expect(urlAnalyze).toMatch(/\/text\/shingles$/);
-
-    const sentBody = JSON.parse(
-      optsAnalyze.body as string
-    ) as Record<string, unknown>;
-    expect(sentBody.text).toBe("hello world test lol");
-
-    const headersAnalyze = optsAnalyze
-      .headers as Record<string, unknown>;
-    expect(headersAnalyze).toMatchObject({
-      "Content-Type": "application/json",
-    });
-
-    const call1 = spy.mock.calls[1] as [string, RequestInit];
-    const urlPlag = call1[0];
-    const optsPlag = call1[1];
-
-    expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
-
-    const sentBodyPlag = JSON.parse(
-      optsPlag.body as string
-    ) as Record<string, unknown>;
-    expect(sentBodyPlag).toMatchObject({
-      text: "hello world test lol",
-      shingleSize: 5,
-      sampleStep: 2,
-    });
+  const plagFileInput = screen.getByLabelText(
+    /Upload file to check plagiarism/i
+  );
+  const thesis = new File(["text"], "oops.txt", {
+    type: "text/plain",
   });
 
-  test("shows API error for text analyze (any mode)", async () => {
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy.mockResolvedValueOnce(
-      new Response("Server error", {
-        status: 500,
-        headers: { "Content-Type": "text/plain" },
-      })
-    );
+  await userEvent.upload(plagFileInput, thesis);
 
-    render(<App />);
-
-    await userEvent.type(
-      screen.getByPlaceholderText(/type or paste text here/i),
-      "boom"
-    );
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /analyze text/i })
-    );
-
-    await waitFor(() => {
-      expect(
-        screen.getByText((t) =>
-          /API:\s*API\s+500:\s*Server error/i.test(t)
-        )
-      ).toBeInTheDocument();
-    });
-
-    expect(spy).toHaveBeenCalledTimes(1);
-  });
-
-  test("uploads one file and shows its results tab + plagiarism table", async () => {
-    const file = new File(["text content"], "demo.txt", {
-      type: "text/plain",
-    });
-
-    const analyzePayload_demo = {
-      total: 2,
-      counts: { text: 1, content: 1 },
-      frequencies: { text: 0.5, content: 0.5 },
-    };
-
-    const plagiarismPayload_demo = {
-      score: 0.11,
-      potentialSources: [
-        {
-          matchedShingles: ["text content"],
-          url: "http://src.local/demo",
-        },
-      ],
-    };
-
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(analyzePayload_demo), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(plagiarismPayload_demo), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
-
-    render(<App />);
-
-    const label = screen
-      .getByText(/drop files here or click to choose/i)
-      .closest("label")!;
-    const input = label.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
-
-    await userEvent.upload(input, file);
-
-    const analyzeBtn = await screen.findByRole("button", {
-      name: /analyze file/i,
-    });
-    await userEvent.click(analyzeBtn);
-
-    await waitFor(() => {
-      const fileBtns = screen.getAllByRole("button", {
-        name: /demo\.txt/i,
-      });
-      expect(fileBtns.length).toBeGreaterThanOrEqual(1);
-
-      expect(
-        screen.getByText(/Results — demo\.txt/i)
-      ).toBeInTheDocument();
-
-      expect(screen.getByText("text")).toBeInTheDocument();
-      expect(screen.getByText("content")).toBeInTheDocument();
-
-      expect(
-        screen.getByText(/Plagiarism — demo\.txt/i)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/Score/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/http:\/\/src\.local\/demo/i)
-      ).toBeInTheDocument();
-    });
-
-    expect(spy).toHaveBeenCalledTimes(2);
-
-    const call0 = spy.mock.calls[0] as [string, RequestInit];
-    const urlAnalyze = call0[0];
-    const optsAnalyze = call0[1];
-
-    expect(urlAnalyze).toMatch(/\/file\/analyze$/);
-    expect(optsAnalyze.method).toBe("POST");
-    expect(optsAnalyze.body instanceof FormData).toBe(true);
-
-    const call1 = spy.mock.calls[1] as [string, RequestInit];
-    const urlPlag = call1[0];
-    const optsPlag = call1[1];
-
-    expect(urlPlag).toMatch(/\/plagiarism\/detect\/file$/);
-    expect(optsPlag.method).toBe("POST");
-    expect(optsPlag.body instanceof FormData).toBe(true);
-  });
-
-  test("uploads two files, switches tabs, sees different titles", async () => {
-    const f1 = new File(["a a"], "a.txt", { type: "text/plain" });
-    const f2 = new File(["b b b"], "b.txt", { type: "text/plain" });
-
-    const analyzePayload_a = {
-      total: 2,
-      counts: { a: 2 },
-      frequencies: { a: 1 },
-    };
-
-    const analyzePayload_b = {
-      total: 3,
-      counts: { b: 3 },
-      frequencies: { b: 1 },
-    };
-
-    const plagiarismPayload_a = {
-      score: 0.2,
-      potentialSources: [
-        {
-          matchedShingles: ["a a"],
-          url: "http://src.local/a",
-        },
-      ],
-    };
-
-    const plagiarismPayload_b = {
-      score: 0.9,
-      potentialSources: [
-        {
-          matchedShingles: ["b b b"],
-          url: "http://src.local/b",
-        },
-      ],
-    };
-
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(analyzePayload_a), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(analyzePayload_b), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(plagiarismPayload_a), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(plagiarismPayload_b), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
-
-    render(<App />);
-
-    const label = screen
-      .getByText(/drop files here or click to choose/i)
-      .closest("label")!;
-    const input = label.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
-
-    await userEvent.upload(input, [f1, f2]);
-
-    const btn = await screen.findByRole("button", {
-      name: /analyze files?/i,
-    });
-    await userEvent.click(btn);
-
-    await waitFor(() => {
-      const btnA = screen.getAllByRole("button", { name: /a\.txt/i });
-      const btnB = screen.getAllByRole("button", { name: /b\.txt/i });
-
-      expect(btnA.length).toBeGreaterThanOrEqual(1);
-      expect(btnB.length).toBeGreaterThanOrEqual(1);
-
-      expect(
-        screen.getByText(/Results — a\.txt/i)
-      ).toBeInTheDocument();
-    });
-
-    const bTabBtn = screen.getAllByRole("button", {
-      name: /b\.txt/i,
-    })[0];
-    await userEvent.click(bTabBtn);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Results — b\.txt/i)
-      ).toBeInTheDocument();
-      expect(screen.getByText("b")).toBeInTheDocument();
-    });
-
-    expect(spy).toHaveBeenCalledTimes(4);
-  });
-
-  test("table sorting: clicking 'Token / Shingle' header toggles order asc/desc", async () => {
-    const analyzePayload = {
-      total: 3,
-      counts: { b: 1, a: 2 },
-      frequencies: { b: 1 / 3, a: 2 / 3 },
-    };
-
-    const plagiarismPayload = {
-      score: 0.5,
-      potentialSources: [],
-    };
-
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(analyzePayload), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(plagiarismPayload), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
-
-    render(<App />);
-
-    await userEvent.type(
-      screen.getByPlaceholderText(/type or paste text here/i),
-      "a a b"
-    );
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /analyze text/i })
-    );
-
-    await screen.findByText("a");
-
-    const getRows = () =>
-      screen
-        .getAllByRole("row")
-        .filter((r) => within(r).queryAllByRole("cell").length > 0);
-
-    let rows = getRows();
-    let cells0 = within(rows[0]).getAllByRole("cell");
-    let cells1 = within(rows[1]).getAllByRole("cell");
-
-    expect(cells0[0]).toHaveTextContent(/^a$/i);
-    expect(cells0[1]).toHaveTextContent(/^2$/);
-    expect(cells1[0]).toHaveTextContent(/^b$/i);
-    expect(cells1[1]).toHaveTextContent(/^1$/);
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /^Token \/ Shingle/ })
-    );
-
-    rows = getRows();
-    cells0 = within(rows[0]).getAllByRole("cell");
-    cells1 = within(rows[1]).getAllByRole("cell");
-
-    expect(cells0[0]).toHaveTextContent(/^b$/i);
-    expect(cells1[0]).toHaveTextContent(/^a$/i);
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /^Token \/ Shingle/ })
-    );
-
-    rows = getRows();
-    cells0 = within(rows[0]).getAllByRole("cell");
-    cells1 = within(rows[1]).getAllByRole("cell");
-
-    expect(cells0[0]).toHaveTextContent(/^a$/i);
-    expect(cells1[0]).toHaveTextContent(/^b$/i);
-
-    expect(spy).toHaveBeenCalledTimes(2);
-  });
-
-  test("shows error if files API responds with error", async () => {
-    const spy = vi.spyOn(globalThis, "fetch");
-    spy.mockResolvedValueOnce(
-      new Response("Bad request", {
-        status: 400,
-        headers: { "Content-Type": "text/plain" },
-      })
-    );
-
-    render(<App />);
-
-    const label = screen
-      .getByText(/drop files here or click to choose/i)
-      .closest("label")!;
-    const input = label.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
-
-    const file = new File(["x"], "x.txt", { type: "text/plain" });
-
-    await userEvent.upload(input, file);
-
-    const btn = await screen.findByRole("button", {
-      name: /analyze file/i,
-    });
-    await userEvent.click(btn);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText((t) =>
-          /API:\s*API\s+400:\s*Bad request/i.test(t)
-        )
-      ).toBeInTheDocument();
-    });
-
-    expect(spy).toHaveBeenCalledTimes(1);
+  await waitFor(() => {
+    expect(
+      screen.getByText(/file plagiarism failed/i)
+    ).toBeInTheDocument();
   });
 });
