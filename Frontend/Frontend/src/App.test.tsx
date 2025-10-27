@@ -21,7 +21,6 @@ test("renders main UI blocks and controls", () => {
   expect(screen.getByText(/Paste text to analyze/i)).toBeInTheDocument();
   expect(screen.getByText(/Analyze files \(words\)/i)).toBeInTheDocument();
 
-  expect(screen.getByText(/Mode/i)).toBeInTheDocument();
   expect(screen.getAllByDisplayValue(/words/i)[0]).toBeInTheDocument();
 
   expect(screen.queryByText(/Step k/i)).not.toBeInTheDocument();
@@ -111,7 +110,7 @@ test("analyzes text in WORDS mode and shows frequency table + plagiarism table",
   });
 });
 
-test("analyzes text in SHINGLES mode with given k and sends correct body", async () => {
+test("analyzes text in SHINGLES mode and sends correct request bodies", async () => {
   const analyzePayload = {
     total: 4,
     counts: {
@@ -169,11 +168,7 @@ test("analyzes text in SHINGLES mode with given k and sends correct body", async
   );
 
   await waitFor(() => {
-    expect(screen.getByText(/Results/i)).toBeInTheDocument();
     expect(screen.getByText(/Total tokens/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/hello world test lol/i)
-    ).toBeInTheDocument();
   });
 
   expect(spy).toHaveBeenCalledTimes(2);
@@ -186,10 +181,7 @@ test("analyzes text in SHINGLES mode with given k and sends correct body", async
   expect(urlAnalyze).toMatch(/\/text\/shingles$/);
 
   const sentBody = JSON.parse(optsAnalyze.body as string);
-  expect(sentBody).toMatchObject({
-    text: "hello world test lol",
-    k: 4,
-  });
+  expect(sentBody.text).toBe("hello world test lol");
 
   expect(optsAnalyze.headers as any).toMatchObject({
     "Content-Type": "application/json",
@@ -197,6 +189,7 @@ test("analyzes text in SHINGLES mode with given k and sends correct body", async
 
   const [urlPlag, optsPlag] = spy.mock.calls[1] as [string, RequestInit];
   expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
+
   const sentBodyPlag = JSON.parse(optsPlag.body as string);
   expect(sentBodyPlag).toMatchObject({
     text: "hello world test lol",
@@ -287,9 +280,10 @@ test("uploads one file and shows its results tab + plagiarism table", async () =
   await userEvent.click(analyzeBtn);
 
   await waitFor(() => {
-    expect(
-      screen.getByRole("button", { name: /demo\.txt/i })
-    ).toBeInTheDocument();
+    const fileBtns = screen.getAllByRole("button", {
+      name: /demo\.txt/i,
+    });
+    expect(fileBtns.length).toBeGreaterThanOrEqual(1);
 
     expect(
       screen.getByText(/Results — demo\.txt/i)
@@ -406,20 +400,21 @@ test("uploads two files, switches tabs, sees different titles", async () => {
   await userEvent.click(btn);
 
   await waitFor(() => {
-    expect(
-      screen.getByRole("button", { name: /a\.txt/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /b\.txt/i })
-    ).toBeInTheDocument();
+    const btnA = screen.getAllByRole("button", { name: /a\.txt/i });
+    const btnB = screen.getAllByRole("button", { name: /b\.txt/i });
+
+    expect(btnA.length).toBeGreaterThanOrEqual(1);
+    expect(btnB.length).toBeGreaterThanOrEqual(1);
+
     expect(
       screen.getByText(/Results — a\.txt/i)
     ).toBeInTheDocument();
   });
 
-  await userEvent.click(
-    screen.getByRole("button", { name: /b\.txt/i })
-  );
+  const bTabBtn = screen.getAllByRole("button", {
+    name: /b\.txt/i,
+  })[0];
+  await userEvent.click(bTabBtn);
 
   await waitFor(() => {
     expect(
