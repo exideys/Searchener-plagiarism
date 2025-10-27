@@ -14,35 +14,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function queueFetchJsonOnce(body: unknown, init?: { status?: number }) {
-  const status = init?.status ?? 200;
-  const res = new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-
-  const spy = vi.spyOn(globalThis, "fetch");
-  spy.mockResolvedValueOnce(res);
-  return spy;
-}
-
-function queueFetchTextErrorOnce(status: number, text: string) {
-  const res = new Response(text, {
-    status,
-    headers: { "Content-Type": "text/plain" },
-  });
-  const spy = vi.spyOn(globalThis, "fetch");
-  spy.mockResolvedValueOnce(res);
-  return spy;
-}
-
 test("renders main UI blocks and controls", () => {
   render(<App />);
 
   expect(screen.getByText(/Text Analysis/i)).toBeInTheDocument();
-
   expect(screen.getByText(/Paste text to analyze/i)).toBeInTheDocument();
-
   expect(screen.getByText(/Analyze files \(words\)/i)).toBeInTheDocument();
 
   expect(screen.getByText(/Mode/i)).toBeInTheDocument();
@@ -97,7 +73,6 @@ test("analyzes text in WORDS mode and shows frequency table + plagiarism table",
   await waitFor(() => {
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.getByText("world")).toBeInTheDocument();
-
     expect(screen.getByText(/Total tokens/i)).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });
@@ -106,12 +81,17 @@ test("analyzes text in WORDS mode and shows frequency table + plagiarism table",
     expect(screen.getByText(/Plagiarism — text/i)).toBeInTheDocument();
     expect(screen.getByText(/Sources/i)).toBeInTheDocument();
     expect(screen.getByText(/Score/i)).toBeInTheDocument();
-    expect(screen.getByText(/http:\/\/example\.com\/src1/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/http:\/\/example\.com\/src1/i)
+    ).toBeInTheDocument();
   });
 
   expect(spy).toHaveBeenCalledTimes(2);
 
-  const [urlAnalyze, optsAnalyze] = (spy.mock.calls[0] as [string, RequestInit]);
+  const [urlAnalyze, optsAnalyze] = spy.mock.calls[0] as [
+    string,
+    RequestInit
+  ];
   expect(urlAnalyze).toMatch(/\/text\/analyze$/);
   expect((optsAnalyze.headers as any)["Content-Type"]).toBe(
     "application/json"
@@ -121,7 +101,7 @@ test("analyzes text in WORDS mode and shows frequency table + plagiarism table",
     text: "hello world world",
   });
 
-  const [urlPlag, optsPlag] = (spy.mock.calls[1] as [string, RequestInit]);
+  const [urlPlag, optsPlag] = spy.mock.calls[1] as [string, RequestInit];
   expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
   const sentBodyPlag = JSON.parse(optsPlag.body as string);
   expect(sentBodyPlag).toMatchObject({
@@ -191,12 +171,17 @@ test("analyzes text in SHINGLES mode with given k and sends correct body", async
   await waitFor(() => {
     expect(screen.getByText(/Results/i)).toBeInTheDocument();
     expect(screen.getByText(/Total tokens/i)).toBeInTheDocument();
-    expect(screen.getByText("hello world test lol")).toBeInTheDocument();
+    expect(
+      screen.getByText(/hello world test lol/i)
+    ).toBeInTheDocument();
   });
 
   expect(spy).toHaveBeenCalledTimes(2);
 
-  const [urlAnalyze, optsAnalyze] = (spy.mock.calls[0] as [string, RequestInit]);
+  const [urlAnalyze, optsAnalyze] = spy.mock.calls[0] as [
+    string,
+    RequestInit
+  ];
 
   expect(urlAnalyze).toMatch(/\/text\/shingles$/);
 
@@ -206,11 +191,11 @@ test("analyzes text in SHINGLES mode with given k and sends correct body", async
     k: 4,
   });
 
-  expect((optsAnalyze.headers as any)).toMatchObject({
+  expect(optsAnalyze.headers as any).toMatchObject({
     "Content-Type": "application/json",
   });
 
-  const [urlPlag, optsPlag] = (spy.mock.calls[1] as [string, RequestInit]);
+  const [urlPlag, optsPlag] = spy.mock.calls[1] as [string, RequestInit];
   expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
   const sentBodyPlag = JSON.parse(optsPlag.body as string);
   expect(sentBodyPlag).toMatchObject({
@@ -290,7 +275,9 @@ test("uploads one file and shows its results tab + plagiarism table", async () =
   const label = screen
     .getByText(/drop files here or click to choose/i)
     .closest("label")!;
-  const input = label.querySelector('input[type="file"]') as HTMLInputElement;
+  const input = label.querySelector(
+    'input[type="file"]'
+  ) as HTMLInputElement;
 
   await userEvent.upload(input, file);
 
@@ -304,24 +291,36 @@ test("uploads one file and shows its results tab + plagiarism table", async () =
       screen.getByRole("button", { name: /demo\.txt/i })
     ).toBeInTheDocument();
 
-    expect(screen.getByText(/Results — demo\.txt/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Results — demo\.txt/i)
+    ).toBeInTheDocument();
 
     expect(screen.getByText("text")).toBeInTheDocument();
     expect(screen.getByText("content")).toBeInTheDocument();
 
-    expect(screen.getByText(/Plagiarism — demo\.txt/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Plagiarism — demo\.txt/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/Score/i)).toBeInTheDocument();
-    expect(screen.getByText(/http:\/\/src\.local\/demo/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/http:\/\/src\.local\/demo/i)
+    ).toBeInTheDocument();
   });
 
   expect(spy).toHaveBeenCalledTimes(2);
 
-  const [urlAnalyze, optsAnalyze] = (spy.mock.calls[0] as [string, RequestInit]);
+  const [urlAnalyze, optsAnalyze] = spy.mock.calls[0] as [
+    string,
+    RequestInit
+  ];
   expect(urlAnalyze).toMatch(/\/file\/analyze$/);
   expect(optsAnalyze.method).toBe("POST");
   expect(optsAnalyze.body instanceof FormData).toBe(true);
 
-  const [urlPlag, optsPlag] = (spy.mock.calls[1] as [string, RequestInit]);
+  const [urlPlag, optsPlag] = spy.mock.calls[1] as [
+    string,
+    RequestInit
+  ];
   expect(urlPlag).toMatch(/\/plagiarism\/detect\/file$/);
   expect(optsPlag.method).toBe("POST");
   expect(optsPlag.body instanceof FormData).toBe(true);
@@ -395,7 +394,9 @@ test("uploads two files, switches tabs, sees different titles", async () => {
   const label = screen
     .getByText(/drop files here or click to choose/i)
     .closest("label")!;
-  const input = label.querySelector('input[type="file"]') as HTMLInputElement;
+  const input = label.querySelector(
+    'input[type="file"]'
+  ) as HTMLInputElement;
 
   await userEvent.upload(input, [f1, f2]);
 
@@ -411,14 +412,19 @@ test("uploads two files, switches tabs, sees different titles", async () => {
     expect(
       screen.getByRole("button", { name: /b\.txt/i })
     ).toBeInTheDocument();
-
-    expect(screen.getByText(/Results — a\.txt/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Results — a\.txt/i)
+    ).toBeInTheDocument();
   });
 
-  await userEvent.click(screen.getByRole("button", { name: /b\.txt/i }));
+  await userEvent.click(
+    screen.getByRole("button", { name: /b\.txt/i })
+  );
 
   await waitFor(() => {
-    expect(screen.getByText(/Results — b\.txt/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Results — b\.txt/i)
+    ).toBeInTheDocument();
     expect(screen.getByText("b")).toBeInTheDocument();
   });
 
@@ -518,7 +524,9 @@ test("shows error if files API responds with error", async () => {
   const label = screen
     .getByText(/drop files here or click to choose/i)
     .closest("label")!;
-  const input = label.querySelector('input[type="file"]') as HTMLInputElement;
+  const input = label.querySelector(
+    'input[type="file"]'
+  ) as HTMLInputElement;
 
   const file = new File(["x"], "x.txt", { type: "text/plain" });
 
