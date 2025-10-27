@@ -87,21 +87,26 @@ test("analyzes text in WORDS mode and shows frequency table + plagiarism table",
 
   expect(spy).toHaveBeenCalledTimes(2);
 
+  // ---- assert first request (/text/analyze)
   const [urlAnalyze, optsAnalyze] = spy.mock.calls[0] as [
     string,
     RequestInit
   ];
   expect(urlAnalyze).toMatch(/\/text\/analyze$/);
-  expect((optsAnalyze.headers as any)["Content-Type"]).toBe(
-    "application/json"
-  );
+
+  // read headers without `any`
+  const analyzeHeaders = new Headers(optsAnalyze.headers);
+  expect(analyzeHeaders.get("Content-Type")).toBe("application/json");
+
   const sentBodyAnalyze = JSON.parse(optsAnalyze.body as string);
   expect(sentBodyAnalyze).toMatchObject({
     text: "hello world world",
   });
 
+  // ---- assert second request (/plagiarism/detect)
   const [urlPlag, optsPlag] = spy.mock.calls[1] as [string, RequestInit];
   expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
+
   const sentBodyPlag = JSON.parse(optsPlag.body as string);
   expect(sentBodyPlag).toMatchObject({
     text: "hello world world",
@@ -173,20 +178,20 @@ test("analyzes text in SHINGLES mode and sends correct request bodies", async ()
 
   expect(spy).toHaveBeenCalledTimes(2);
 
+  // first request should be /text/shingles
   const [urlAnalyze, optsAnalyze] = spy.mock.calls[0] as [
     string,
     RequestInit
   ];
-
   expect(urlAnalyze).toMatch(/\/text\/shingles$/);
 
   const sentBody = JSON.parse(optsAnalyze.body as string);
   expect(sentBody.text).toBe("hello world test lol");
 
-  expect(optsAnalyze.headers as any).toMatchObject({
-    "Content-Type": "application/json",
-  });
+  const shinglesHeaders = new Headers(optsAnalyze.headers);
+  expect(shinglesHeaders.get("Content-Type")).toBe("application/json");
 
+  // second request should be /plagiarism/detect
   const [urlPlag, optsPlag] = spy.mock.calls[1] as [string, RequestInit];
   expect(urlPlag).toMatch(/\/plagiarism\/detect$/);
 
