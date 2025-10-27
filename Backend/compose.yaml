@@ -8,3 +8,5 @@
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      GoogleSearch__ApiKey: ${GOOGLE_API_KEY} 
+      GoogleSearch__SearchEngineId: ${GOOGLE_SEARCH_ENGINE_ID}
