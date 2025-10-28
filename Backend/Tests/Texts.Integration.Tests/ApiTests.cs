@@ -169,7 +169,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
             .ReturnsAsync("http://mocked-url.com/found");
         googleClientMock
             .Setup(c => c.FindFirstMatchUrlAsync("is a test"))
-            .ReturnsAsync((string?)null); // Мокируем один промах
+            .ReturnsAsync((string?)null); 
 
         var client = _factory.WithWebHostBuilder(builder =>
         {
