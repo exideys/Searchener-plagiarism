@@ -273,7 +273,7 @@ export async function detectPlagiarismText(
     return data;
   }
 
-  // fallback (если API не вернул нормальную структуру)
+
   return { score: 0, potentialSources: [] };
 }
 
