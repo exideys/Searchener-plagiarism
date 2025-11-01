@@ -8,14 +8,16 @@ public sealed class AnalyzeFileService : IAnalyzeFileService
 {
     private readonly ITextService _textService;
     private readonly IShingleService _shingleService;
+    private readonly IFileComparerService _fileComparerService;
     
     private readonly string[] _allowedExtensions;
 
-    public AnalyzeFileService(ITextService textService, IShingleService shingleService, IConfiguration configuration)
+    public AnalyzeFileService(ITextService textService, IShingleService shingleService, IConfiguration configuration, IFileComparerService fileComparerService)
     {
         _textService = textService;
         _shingleService = shingleService;
-        _allowedExtensions = configuration.GetSection("AllowedFileExtensions").Get<string[]>() ?? [".txt", ".log"];
+        _fileComparerService = fileComparerService;
+        _allowedExtensions = configuration.GetSection("AllowedFileExtensions").Get<string[]>() ?? new[] { ".txt", ".log" };
     }
 
     public async Task<TextStats> Execute(Stream fileStream, string fileName)
@@ -52,5 +54,13 @@ public sealed class AnalyzeFileService : IAnalyzeFileService
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
         if (!_allowedExtensions.Contains(ext))
             throw new ArgumentException($"Unsupported file extension '{ext}'. Allowed: {string.Join(", ", _allowedExtensions)}");
+    }
+
+    public async Task<FileComparisonResult> CompareTwoFilesAsync(Stream fileStream1, string fileName1, Stream fileStream2, string fileName2, int shingleSize)
+    {
+        var content1 = await ReadAndValidateFileContentAsync(fileStream1, fileName1);
+        var content2 = await ReadAndValidateFileContentAsync(fileStream2, fileName2);
+
+        return await _fileComparerService.CompareAsync(content1, content2, shingleSize);
     }
 }

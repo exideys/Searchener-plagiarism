@@ -18,7 +18,7 @@ builder.Services.AddSwaggerGen();
 
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
-    .WithOrigins("http://localhost:5173")
+    .WithOrigins(builder.Configuration["FrontendOrigin"] ?? "http://localhost:5173") 
     .AllowAnyHeader()
     .AllowAnyMethod()
     .AllowCredentials()
@@ -30,9 +30,7 @@ app.UseCors();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.MapPost(
-    "/text/analyze",
-    ([FromBody] AnalyzeTextRequest req, ITextService svc) =>
+app.MapPost("/text/analyze", ([FromBody] AnalyzeTextRequest req, ITextService svc) =>
     {
         try
         {
@@ -106,7 +104,7 @@ app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService
             case 0:
                 return Results.BadRequest(new { error = "Empty file" });
             case > maxFileSize:
-                return Results.BadRequest(new { error = $"File is too large (max {maxFileSize} bytes)" });
+                return Results.Problem(detail: $"File is too large (max {maxFileSize} bytes)", statusCode: StatusCodes.Status413PayloadTooLarge);
             default:
                 try
                 {
@@ -133,6 +131,7 @@ app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status413PayloadTooLarge)
     .WithOpenApi();
 
 app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileService svc) =>
@@ -158,7 +157,7 @@ app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileServic
         }
         
         if (file.Length is 0 or > maxFileSize)
-            return Results.BadRequest(new { error = $"Invalid file size. Max: {maxFileSize} bytes." });
+            return Results.Problem(detail: $"Invalid file size. Max: {maxFileSize} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
 
         try
         {
@@ -180,6 +179,7 @@ app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileServic
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<ExtractShinglesResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status413PayloadTooLarge)
     .WithOpenApi();
 
 app.MapPost("/plagiarism/detect", async ([FromBody] DetectPlagiarismRequest req, IPlagiarismDetectorService svc) =>
@@ -219,7 +219,7 @@ app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeF
             return Results.BadRequest(new { error = "File is required" });
 
         if (file.Length is 0 or > maxFileSize)
-            return Results.BadRequest(new { error = $"Invalid file size. Max: {maxFileSize} bytes." });
+            return Results.Problem(detail: $"Invalid file size. Max: {maxFileSize} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
         
         if (!int.TryParse(form["shingleSize"], out var shingleSize) || shingleSize <= 0)
             return Results.BadRequest(new { error = "A valid 'shingleSize' parameter is required." });
@@ -252,6 +252,68 @@ app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeF
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<DetectPlagiarismResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status413PayloadTooLarge)
+    .WithOpenApi();
+
+app.MapPost("/files/compare", async (HttpRequest httpRequest, IAnalyzeFileService fileSvc) =>
+{
+    var requestSizeFeature = httpRequest.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+    if (requestSizeFeature is not null)
+    {
+        requestSizeFeature.MaxRequestBodySize = maxFileSize * 2;
+    }
+
+    if (!httpRequest.HasFormContentType)
+        return Results.BadRequest(new { error = "Expected multipart/form-data" });
+
+    var form = await httpRequest.ReadFormAsync();
+    var files = form.Files;
+
+    if (files.Count != 2)
+        return Results.BadRequest(new { error = "Exactly two files are required for comparison." });
+
+    var file1 = files[0];
+    var file2 = files[1];
+
+    if (file1.Length is 0 or > maxFileSize || file2.Length is 0 or > maxFileSize)
+        return Results.Problem(
+            detail: $"Invalid file size. Max: {maxFileSize} bytes.",
+            statusCode: StatusCodes.Status413PayloadTooLarge
+        );
+    if (!int.TryParse(form["shingleSize"], out var shingleSize) || shingleSize <= 0)
+        return Results.BadRequest(new { error = "A valid 'shingleSize' parameter is required." });
+    try
+    {
+        await using var stream1 = file1.OpenReadStream();
+        await using var stream2 = file2.OpenReadStream();
+
+        var result = await fileSvc.CompareTwoFilesAsync(stream1, file1.FileName, stream2, file2.FileName, shingleSize);
+
+        var responseDto = new FileComparisonResult(
+            result.SimilarityPercentage,
+            result.CommonShingles.Select(cs => new MatchedShingles(cs.MatchedShingle, cs.MatchedFirstFileCount, cs.MatchedSecondFileCount)).ToList(),
+            result.TotalFirstTextShingles,
+            result.TotalSecondTextShingles,
+            result.TotalCommonShingles
+        );
+        
+        return Results.Ok(responseDto);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+})
+    .WithName("CompareFiles")
+    .Accepts<IFormFile>("multipart/form-data")
+    .Produces<FileComparisonResult>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status413PayloadTooLarge)
+    .WithOpenApi();
+
+app.MapPost("/health", () => Results.Ok(new { status = "Healthy" }))
+    .WithName("HealthCheck")
+    .Produces(StatusCodes.Status200OK)
     .WithOpenApi();
 
 app.Run();
