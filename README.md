@@ -103,9 +103,9 @@ Alternatively, components can be set up and run independently:
 
 #### 4.3.2. Frontend Setup
 
-1.  Navigate to the `Frontend/Frontend` directory:
+1.  Navigate to the `Frontend/Frontend/src` directory:
     ```bash
-    cd Frontend/Frontend
+    cd Frontend/Frontend/src
     ```
 2.  Install Node.js dependencies:
     ```bash
