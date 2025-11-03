@@ -5,6 +5,7 @@ import {
   analyzeFiles,
   detectPlagiarismText,
   detectPlagiarismFiles,
+  compareFilesShingles,
   API_BASE_URL,
 } from "./api/analysisApi";
 
@@ -13,6 +14,7 @@ import {
   PlagiarismResponse,
   FileAnalyzeItem,
   FilePlagiarismItem,
+  FileComparisonResult,
 } from "./types/analysis";
 
 import { Loader } from "./components/Loader";
@@ -21,6 +23,8 @@ import { ResultsTable } from "./features/ResultsTable";
 import { PlagiarismTable } from "./features/PlagiarismTable";
 import { FileResultsBlock } from "./features/FileResultsBlock";
 import { FilePlagiarismBlock } from "./features/FilePlagiarismBlock";
+
+type FileMode = "words" | "shingles" | "shingles-compare";
 
 export default function App() {
   const [text, setText] = useState("");
@@ -32,12 +36,14 @@ export default function App() {
 
   const [fileResults, setFileResults] = useState<FileAnalyzeItem[] | null>(null);
   const [filePlagiarism, setFilePlagiarism] = useState<FilePlagiarismItem[] | null>(null);
+  const [fileComparison, setFileComparison] = useState<FileComparisonResult | null>(null);
+  const [comparedFiles, setComparedFiles] = useState<[string, string] | null>(null);
 
   const [loading, setLoading] = useState<"text" | "files" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [textMode, setTextMode] = useState<"words" | "shingles">("words");
-  const [fileMode, setFileMode] = useState<"words" | "shingles">("words");
+  const [fileMode, setFileMode] = useState<FileMode>("words");
 
   const [k, setK] = useState<number>(3);
 
@@ -53,6 +59,8 @@ export default function App() {
 
     setFileResults(null);
     setFilePlagiarism(null);
+    setFileComparison(null);
+    setComparedFiles(null);
 
     try {
       const ctrl = new AbortController();
@@ -81,15 +89,27 @@ export default function App() {
 
     setFileResults(null);
     setFilePlagiarism(null);
+    setFileComparison(null);
+    setComparedFiles(null);
 
     try {
       const ctrl = new AbortController();
 
-      const analyzeds = await analyzeFiles(pendingFiles, fileMode, k, ctrl.signal);
-      setFileResults(analyzeds);
+      if (fileMode === "shingles-compare") {
+        if (pendingFiles.length !== 2) {
+          throw new Error("Shingles comparison mode requires exactly 2 files.");
+        }
 
-      const plagItems = await detectPlagiarismFiles(pendingFiles, ctrl.signal);
-      setFilePlagiarism(plagItems);
+        const result = await compareFilesShingles(pendingFiles, k, ctrl.signal);
+        setFileComparison(result);
+        setComparedFiles([pendingFiles[0].name, pendingFiles[1].name]);
+      } else {
+        const analyzeds = await analyzeFiles(pendingFiles, fileMode, k, ctrl.signal);
+        setFileResults(analyzeds);
+
+        const plagItems = await detectPlagiarismFiles(pendingFiles, ctrl.signal);
+        setFilePlagiarism(plagItems);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(msg || "API error");
@@ -97,6 +117,13 @@ export default function App() {
       setLoading(null);
     }
   };
+
+  const fileModeLabel =
+    fileMode === "words"
+      ? "Words"
+      : fileMode === "shingles"
+      ? "Shingles"
+      : "Shingles comparison";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -181,7 +208,7 @@ export default function App() {
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between flex-col sm:flex-row sm:items-center">
               <div className="text-sm font-semibold">
-                Analyze files ({fileMode})
+                Analyze files ({fileModeLabel})
               </div>
               <div className="text-xs text-gray-500">
                 Selected: {pendingFiles.length || 0}
@@ -196,22 +223,22 @@ export default function App() {
                 <select
                   className="border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={fileMode}
-                  onChange={(e) =>
-                    setFileMode(
-                      e.target.value === "shingles" ? "shingles" : "words"
-                    )
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value as FileMode;
+                    setFileMode(value);
+                  }}
                   disabled={loading !== null}
                 >
                   <option value="words">Words</option>
                   <option value="shingles">Shingles</option>
+                  <option value="shingles-compare">Shingles comparison</option>
                 </select>
               </label>
 
-              {fileMode === "shingles" && (
+              {(fileMode === "shingles" || fileMode === "shingles-compare") && (
                 <label className="flex items-center gap-1">
                   <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
-                    Step k
+                    Shingle size k
                   </span>
                   <input
                     type="number"
@@ -225,6 +252,12 @@ export default function App() {
                     }}
                   />
                 </label>
+              )}
+
+              {fileMode === "shingles-compare" && (
+                <div className="text-[11px] text-gray-500">
+                  Requires exactly 2 files.
+                </div>
               )}
             </div>
 
@@ -261,7 +294,11 @@ export default function App() {
                 <button
                   className="ml-auto inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white disabled:opacity-50 hover:bg-indigo-500 transition"
                   onClick={runFilesAnalyze}
-                  disabled={!pendingFiles.length || loading !== null}
+                  disabled={
+                    !pendingFiles.length ||
+                    loading !== null ||
+                    (fileMode === "shingles-compare" && pendingFiles.length !== 2)
+                  }
                 >
                   Analyze file
                   {pendingFiles.length > 1 ? "s" : ""}
@@ -296,6 +333,101 @@ export default function App() {
 
         {!loading && filePlagiarism && !!filePlagiarism.length && (
           <FilePlagiarismBlock results={filePlagiarism} />
+        )}
+
+        {/* блок сравнения шинглов по образцу из методички */}
+        {!loading && fileComparison && (
+          <div className="bg-white border rounded-2xl p-4 shadow-sm grid gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">
+                Shingles comparison result
+              </h2>
+              {comparedFiles && (
+                <div className="text-[11px] text-gray-500">
+                  {comparedFiles[0]} ⟷ {comparedFiles[1]}
+                </div>
+              )}
+            </div>
+
+            <div className="text-sm">
+              <span className="text-[11px] uppercase tracking-wide font-semibold opacity-70">
+                Similarity
+              </span>{" "}
+              <span className="text-base font-bold">
+                {(fileComparison.similarityPercentage * 100).toFixed(2)}%
+              </span>
+            </div>
+
+            <div className="border rounded-xl overflow-hidden">
+              <div className="px-3 py-2 text-xs font-semibold bg-gray-50 border-b">
+                Common shingles table
+              </div>
+              <div className="max-h-72 overflow-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-3 py-1.5 font-semibold">
+                        Shingle
+                      </th>
+                      <th className="text-right px-3 py-1.5 font-semibold">
+                        {comparedFiles ? comparedFiles[0] : "a"}
+                      </th>
+                      <th className="text-right px-3 py-1.5 font-semibold">
+                        {comparedFiles ? comparedFiles[1] : "b"}
+                      </th>
+                      <th className="text-right px-3 py-1.5 font-semibold">
+                        common
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fileComparison.commonShingles.map((cs, idx) => {
+                      const commonCount = Math.min(
+                        cs.matchedFirstFileCount,
+                        cs.matchedSecondFileCount
+                      );
+
+                      return (
+                        <tr
+                          key={idx}
+                          className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
+                        >
+                          <td className="px-3 py-1.5 align-top">
+                            <code className="text-[11px] break-all">
+                              {cs.matchedShingle}
+                            </code>
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            {cs.matchedFirstFileCount}
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            {cs.matchedSecondFileCount}
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            {commonCount}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {/* строка Σ как в примере */}
+                    <tr className="bg-gray-100 font-semibold border-t">
+                      <td className="px-3 py-1.5">Σ</td>
+                      <td className="px-3 py-1.5 text-right">
+                        {fileComparison.totalFirstTextShingles}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        {fileComparison.totalSecondTextShingles}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        {fileComparison.totalCommonShingles}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
