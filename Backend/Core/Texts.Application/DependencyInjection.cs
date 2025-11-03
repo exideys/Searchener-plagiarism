@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddScoped<IAnalyzeFileService, AnalyzeFileService>();
         services.AddScoped<IShingleService, ShingleService>();
         services.AddScoped<IPlagiarismDetectorService, PlagiarismDetectorService>();
+        services.AddScoped<IFileComparerService, FileComparerService>();
         
         return services;
     }

@@ -21,3 +21,13 @@ public sealed record DetectPlagiarismRequest(string Text, int ShingleSize, int S
 public sealed record DetectPlagiarismResponse(double Score, List<SourceMatchDto> PotentialSources);
 
 public sealed record SourceMatchDto(List<string> MatchedShingles, string Url);
+
+public sealed record FileComparisonResult(
+    double SimilarityPercentage, 
+    List<MatchedShingles> CommonShingles,
+    int TotalFirstTextShingles,
+    int TotalSecondTextShingles,
+    int TotalCommonShingles
+    );
+
+public sealed record MatchedShingles(string MatchedShingle, int MatchedFirstFileCount, int MatchedSecondFileCount);

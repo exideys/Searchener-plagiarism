@@ -7,7 +7,7 @@ public static class TextAnalyzer
     public static string[] Tokenize(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return [];
+            return Array.Empty<string>();
         
         var cleaned = new string(
             text

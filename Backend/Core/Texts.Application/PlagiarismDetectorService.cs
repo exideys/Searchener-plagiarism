@@ -43,11 +43,9 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
         var foundUrls = await Task.WhenAll(searchTasks);
         
         
-        var shingleAndUrlPairs = new List<(string Shingle, string? Url)>();
-        for (int i = 0; i < shinglesToSearch.Count; i++)
-        {
-            shingleAndUrlPairs.Add((shinglesToSearch[i], foundUrls[i]));
-        }
+        var shingleAndUrlPairs = shinglesToSearch
+            .Zip(foundUrls, (shingle, url) => (Shingle: shingle, Url: url))
+            .ToList();
         
         var matches = shingleAndUrlPairs.Where(pair => !string.IsNullOrEmpty(pair.Url)).ToList();
         
