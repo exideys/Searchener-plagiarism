@@ -7,6 +7,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddMemoryCache();
         services.AddHttpClient<IGoogleSearchClient, GoogleSearchClient>(client =>
         {
             client.BaseAddress = new Uri("https://www.googleapis.com/customsearch/v1");
