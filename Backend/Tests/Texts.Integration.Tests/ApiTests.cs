@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
-using FluentAssertions;
 using Texts.Contracts;
 
 namespace Texts.Api.Tests;
@@ -25,12 +24,13 @@ public class TextApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var response = await _client.PostAsJsonAsync("/text/analyze", request);
         
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<AnalyzeTextResponse>();
 
-        dto.Should().NotBeNull();
-        dto!.Total.Should().Be(3);
-        dto.Counts.Should().ContainKey("aa").WhoseValue.Should().Be(2);
+        Assert.NotNull(dto);
+        Assert.Equal(3, dto!.Total);
+        Assert.Contains(new KeyValuePair<string, int>("aa", 2), dto.Counts);
+        Assert.Equal(2, dto.Counts["aa"]);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class TextApiTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var request = new AnalyzeTextRequest(" ");
         var response = await _client.PostAsJsonAsync("/text/analyze", request);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -47,13 +47,14 @@ public class TextApiTests : IClassFixture<WebApplicationFactory<Program>>
         var request = new ExtractShinglesRequest("one two three one two", 2);
         var response = await _client.PostAsJsonAsync("/text/shingles", request);
         
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<ExtractShinglesResponse>();
 
-        dto.Should().NotBeNull();
-        dto!.Total.Should().Be(4);
-        dto.Counts.Should().ContainKey("one two").WhoseValue.Should().Be(2);
-        dto.Frequencies["one two"].Should().Be(0.5);
+        Assert.NotNull(dto);
+        Assert.Equal(4, dto!.Total);
+        Assert.Contains("one two", dto.Counts);
+        Assert.Equal(2, dto.Counts["one two"]);
+        Assert.Equal(0.5, dto.Frequencies["one two"]);
     }
 
     [Fact]
@@ -61,6 +62,6 @@ public class TextApiTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var request = new ExtractShinglesRequest("some text", 0);
         var response = await _client.PostAsJsonAsync("/text/shingles", request);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

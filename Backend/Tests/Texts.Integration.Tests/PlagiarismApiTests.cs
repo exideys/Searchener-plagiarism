@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using FluentAssertions;
+
 using Texts.Contracts;
 using Texts.Infrastructure;
 
@@ -44,12 +44,12 @@ public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var response = await client.PostAsJsonAsync("/plagiarism/detect", request);
         
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<DetectPlagiarismResponse>();
     
-        dto.Should().NotBeNull();
-        dto!.Score.Should().Be(1.0);
-        dto.PotentialSources.First().Url.Should().Be("http://mocked-url.com/found");
+        Assert.NotNull(dto);
+        Assert.Equal(1.0, dto.Score);
+        Assert.Equal("http://mocked-url.com/found", dto.PotentialSources.First().Url);
     }
     
     [Fact]
@@ -74,12 +74,12 @@ public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var response = await client.PostAsync("/plagiarism/detect/file", form);
         
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<DetectPlagiarismResponse>();
         
-        dto.Should().NotBeNull();
-        dto!.Score.Should().BeApproximately(0.333, 0.01);
-        dto.PotentialSources.Should().ContainSingle()
-           .Which.Url.Should().Be("http://mocked.com/found");
+        Assert.NotNull(dto);
+        Assert.InRange(dto.Score, 0.323, 0.343);
+        var source = Assert.Single(dto.PotentialSources);
+        Assert.Equal("http://mocked.com/found", source.Url);
     }
 }
