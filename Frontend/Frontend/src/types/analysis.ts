@@ -21,3 +21,17 @@ export type PlagiarismResponse = {
 export type FilePlagiarismItem = PlagiarismResponse & {
   fileName?: string;
 };
+
+export type MatchedShingles = {
+  matchedShingle: string;
+  matchedFirstFileCount: number;
+  matchedSecondFileCount: number;
+};
+
+export type FileComparisonResult = {
+  similarityPercentage: number;
+  commonShingles: MatchedShingles[];
+  totalFirstTextShingles: number;
+  totalSecondTextShingles: number;
+  totalCommonShingles: number;
+};

@@ -20,6 +20,20 @@ export type FilePlagiarismItem = PlagiarismResponse & {
   fileName?: string;
 };
 
+export type MatchedShingles = {
+  matchedShingle: string;
+  matchedFirstFileCount: number;
+  matchedSecondFileCount: number;
+};
+
+export type FileComparisonResult = {
+  similarityPercentage: number;
+  commonShingles: MatchedShingles[];
+  totalFirstTextShingles: number;
+  totalSecondTextShingles: number;
+  totalCommonShingles: number;
+};
+
 export const API_BASE_URL = import.meta.env?.VITE_API_URL as
   | string
   | undefined;
@@ -30,6 +44,7 @@ const FILE_ENDPOINT_WORDS = "/file/analyze";
 const FILE_ENDPOINT_SHINGLES = "/file/shingles";
 const PLAINTEXT_PLAGIARISM_ENDPOINT = "/plagiarism/detect";
 const FILE_PLAGIARISM_ENDPOINT = "/plagiarism/detect/file";
+const FILES_COMPARE_ENDPOINT = "/files/compare";
 
 export const DEFAULT_SHINGLE_SIZE = 5;
 export const DEFAULT_SAMPLE_STEP = 2;
@@ -94,6 +109,48 @@ function isPlagiarismResponse(
     );
 
   return scoreOk && sourcesOk;
+}
+
+function isMatchedShingles(x: unknown): x is MatchedShingles {
+  if (!isPlainRecord(x)) return false;
+
+  const {
+    matchedShingle,
+    matchedFirstFileCount,
+    matchedSecondFileCount,
+  } = x;
+
+  return (
+    typeof matchedShingle === "string" &&
+    typeof matchedFirstFileCount === "number" &&
+    typeof matchedSecondFileCount === "number"
+  );
+}
+
+function isFileComparisonResult(
+  x: unknown
+): x is FileComparisonResult {
+  if (!isPlainRecord(x)) return false;
+
+  const {
+    similarityPercentage,
+    commonShingles,
+    totalFirstTextShingles,
+    totalSecondTextShingles,
+    totalCommonShingles,
+  } = x;
+
+  const numsOk =
+    typeof similarityPercentage === "number" &&
+    typeof totalFirstTextShingles === "number" &&
+    typeof totalSecondTextShingles === "number" &&
+    typeof totalCommonShingles === "number";
+
+  const shinglesOk =
+    Array.isArray(commonShingles) &&
+    commonShingles.every((cs) => isMatchedShingles(cs));
+
+  return numsOk && shinglesOk;
 }
 
 export async function analyzeText(
@@ -273,7 +330,6 @@ export async function detectPlagiarismText(
     return data;
   }
 
-
   return { score: 0, potentialSources: [] };
 }
 
@@ -329,4 +385,88 @@ export async function detectPlagiarismFiles(
   }
 
   return results;
+}
+
+export async function compareFilesShingles(
+  files: File[],
+  shingleSize: number,
+  signal?: AbortSignal
+): Promise<FileComparisonResult> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_URL is not set (.env).");
+  }
+
+  if (files.length !== 2) {
+    throw new Error("Shingles comparison requires exactly 2 files.");
+  }
+
+  const fdCompare = new FormData();
+  fdCompare.append("files", files[0], files[0].name);
+  fdCompare.append("files", files[1], files[1].name);
+  fdCompare.append("shingleSize", String(shingleSize));
+
+  const resCompare = await fetch(
+    `${API_BASE_URL.replace(/\/$/, "")}${FILES_COMPARE_ENDPOINT}`,
+    {
+      method: "POST",
+      body: fdCompare,
+      signal,
+    }
+  );
+
+  if (!resCompare.ok) {
+    const msg = await resCompare.text().catch(() => resCompare.statusText);
+    throw new Error(`Compare API ${resCompare.status}: ${msg}`);
+  }
+
+  const baseData: unknown = await resCompare.json();
+  if (!isFileComparisonResult(baseData)) {
+    throw new Error("Unexpected compare API response shape");
+  }
+
+  const stats1 = await analyzeSingleFileShingles(files[0], shingleSize, signal);
+  const stats2 = await analyzeSingleFileShingles(files[1], shingleSize, signal);
+
+  const counts1 = stats1.counts;
+  const counts2 = stats2.counts;
+
+  const allKeys = new Set<string>([
+    ...Object.keys(counts1),
+    ...Object.keys(counts2),
+  ]);
+
+  const rows: MatchedShingles[] = [];
+  let totalFirst = 0;
+  let totalSecond = 0;
+  let totalCommon = 0;
+
+  for (const key of allKeys) {
+    const c1 = counts1[key] ?? 0;
+    const c2 = counts2[key] ?? 0;
+    const common = Math.min(c1, c2);
+
+    totalFirst += c1;
+    totalSecond += c2;
+    totalCommon += common;
+
+    rows.push({
+      matchedShingle: key,
+      matchedFirstFileCount: c1,
+      matchedSecondFileCount: c2,
+    });
+  }
+
+  rows.sort((a, b) => {
+    const ca = Math.min(a.matchedFirstFileCount, a.matchedSecondFileCount);
+    const cb = Math.min(b.matchedFirstFileCount, b.matchedSecondFileCount);
+    return cb - ca;
+  });
+
+  return {
+    similarityPercentage: baseData.similarityPercentage,
+    commonShingles: rows,
+    totalFirstTextShingles: totalFirst,
+    totalSecondTextShingles: totalSecond,
+    totalCommonShingles: totalCommon,
+  };
 }
