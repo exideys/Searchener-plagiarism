@@ -115,4 +115,28 @@ public sealed class AnalyzeFileServiceTests
         Assert.Same(expectedResult, result);
         _fileComparerServiceMock.Verify(s => s.CompareAsync(content1, content2, shingleSize), Times.Once);
     }
+    
+    [Fact]
+    public async Task ReadAndValidateFileContentAsync_WithUppercaseExtension_ShouldSucceed()
+    {
+        await using var ms = new MemoryStream(Encoding.UTF8.GetBytes("hello world"));
+        
+        var content = await _service.ReadAndValidateFileContentAsync(ms, "FILE.TXT");
+        
+        Assert.Equal("hello world", content);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task ReadAndValidateFileContentAsync_WithNullOrEmptyFileName_ShouldThrowArgumentException(string? fileName)
+    {
+        await using var ms = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
+        
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => 
+            _service.ReadAndValidateFileContentAsync(ms, fileName!));
+            
+        Assert.Contains("File name is required", ex.Message);
+    }
 }

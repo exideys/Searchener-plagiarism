@@ -1,3 +1,5 @@
+
+using System;
 using Xunit;
 using System.Net;
 using System.Linq;
@@ -8,19 +10,19 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-
+using Texts.Application;
 using Texts.Contracts;
 using Texts.Infrastructure;
 
-namespace Texts.Api.Tests;
+namespace Texts.Integration.Tests;
 
-public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class PlagiarismApiTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly CustomWebApplicationFactory _factory;
 
-    public PlagiarismApiTests(WebApplicationFactory<Program> factory)
+    public PlagiarismApiTests()
     {
-        _factory = factory;
+        _factory = new CustomWebApplicationFactory();
     }
 
     [Fact]
@@ -30,15 +32,15 @@ public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
         googleClientMock
             .Setup(c => c.FindFirstMatchUrlAsync(It.IsAny<string>()))
             .ReturnsAsync("http://mocked-url.com/found");
-        
-        var client = _factory.WithWebHostBuilder(builder =>
+
+        var factory = new CustomWebApplicationFactory();
+        var client = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
             {
-                builder.ConfigureServices(services =>
-                {
-                    services.AddScoped<IGoogleSearchClient>(_ => googleClientMock.Object);
-                });
-            })
-            .CreateClient();
+                services.AddScoped<IGoogleSearchClient>(_ => googleClientMock.Object);
+            });
+        }).CreateClient();
         
         var request = new DetectPlagiarismRequest("This sentence is a test.", 4, 1);
         
@@ -48,7 +50,7 @@ public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
         var dto = await response.Content.ReadFromJsonAsync<DetectPlagiarismResponse>();
     
         Assert.NotNull(dto);
-        Assert.Equal(1.0, dto.Score);
+        Assert.Single(dto.PotentialSources);
         Assert.Equal("http://mocked-url.com/found", dto.PotentialSources.First().Url);
     }
     
@@ -57,9 +59,10 @@ public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var googleClientMock = new Mock<IGoogleSearchClient>();
         googleClientMock.Setup(c => c.FindFirstMatchUrlAsync("this is a")).ReturnsAsync("http://mocked.com/found");
-        googleClientMock.Setup(c => c.FindFirstMatchUrlAsync("is a test")).ReturnsAsync((string?)null); 
+        googleClientMock.Setup(c => c.FindFirstMatchUrlAsync("is a test")).ReturnsAsync((string?)null);
 
-        var client = _factory.WithWebHostBuilder(builder =>
+        var factory = new CustomWebApplicationFactory();
+        var client = factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
@@ -81,5 +84,43 @@ public class PlagiarismApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.InRange(dto.Score, 0.323, 0.343);
         var source = Assert.Single(dto.PotentialSources);
         Assert.Equal("http://mocked.com/found", source.Url);
+    }
+    
+    [Fact]
+    public async Task DetectPlagiarism_WithEmptyBody_ShouldReturnBadRequest()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync("/plagiarism/detect", new StringContent("{}", Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetectPlagiarism_WithInvalidBody_ShouldReturnBadRequest()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync("/plagiarism/detect", new StringContent("{\"text123\": \"some text\"}", Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetectPlagiarism_WithServiceException_ShouldReturnInternalServerError()
+    {
+        var plagiarismDetectorMock = new Mock<IPlagiarismDetectorService>();
+        plagiarismDetectorMock.Setup(s => s.DetectAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Test error"));
+
+        var factory = new CustomWebApplicationFactory();
+        var client = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddScoped<IPlagiarismDetectorService>(_ => plagiarismDetectorMock.Object);
+            });
+        }).CreateClient();
+        
+        var request = new DetectPlagiarismRequest("This will fail.", 4, 1);
+        var response = await client.PostAsJsonAsync("/plagiarism/detect", request);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 }

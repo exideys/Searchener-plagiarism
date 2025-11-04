@@ -639,4 +639,8 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 */.env
+**/TestResults/
+*.coverage
+*.coveragexml
+coverage*.info
 # End of https://www.toptal.com/developers/gitignore/api/rider,csharp,aspnetcore,dotnetcore,macos,windows

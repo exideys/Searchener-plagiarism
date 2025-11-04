@@ -117,4 +117,104 @@ public class GoogleSearchClientTests
             ItExpr.IsAny<CancellationToken>()
         );
     }
+
+    [Fact]
+    public async Task FindFirstMatchUrlAsync_ShouldReturnNull_WhenApiReturnsError()
+    {
+        var phrase = "error phrase";
+        _httpMessageHandlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.InternalServerError
+            });
+
+        var client = new GoogleSearchClient(_httpClient, _configurationMock.Object, _loggerMock.Object, _memoryCache);
+
+        var result = await client.FindFirstMatchUrlAsync(phrase);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task FindFirstMatchUrlAsync_ShouldReturnNull_WhenApiThrowsException()
+    {
+        var phrase = "exception phrase";
+        _httpMessageHandlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ThrowsAsync(new HttpRequestException());
+
+        var client = new GoogleSearchClient(_httpClient, _configurationMock.Object, _loggerMock.Object, _memoryCache);
+
+        var result = await client.FindFirstMatchUrlAsync(phrase);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task FindFirstMatchUrlAsync_ShouldReturnNull_WhenApiReturnsNoItems()
+    {
+        var phrase = "no items phrase";
+        var jsonResponse = """
+        {
+            "kind": "customsearch#search",
+            "items": []
+        }
+        """;
+
+        _httpMessageHandlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(jsonResponse, System.Text.Encoding.UTF8, "application/json")
+            });
+
+        var client = new GoogleSearchClient(_httpClient, _configurationMock.Object, _loggerMock.Object, _memoryCache);
+
+        var result = await client.FindFirstMatchUrlAsync(phrase);
+
+        Assert.Null(result);
+    }
+    
+    [Fact]
+    public async Task FindFirstMatchUrlAsync_ShouldReturnNull_WhenApiReturnsNullResult()
+    {
+        var phrase = "null result phrase";
+        var jsonResponse = "null";
+
+        _httpMessageHandlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+            )
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(jsonResponse, System.Text.Encoding.UTF8, "application/json")
+            });
+
+        var client = new GoogleSearchClient(_httpClient, _configurationMock.Object, _loggerMock.Object, _memoryCache);
+
+        var result = await client.FindFirstMatchUrlAsync(phrase);
+
+        Assert.Null(result);
+    }
 }

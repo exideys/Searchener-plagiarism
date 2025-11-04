@@ -17,6 +17,8 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
 
     public async Task<PlagiarismResult> DetectAsync(string text, int shingleSize, int sampleStep)
     {
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("Text cannot be null or empty.", nameof(text));
         if (shingleSize <= 0)
             throw new ArgumentException("Shingle size must be greater than 0.", nameof(shingleSize));
         if (sampleStep <= 0)
@@ -37,7 +39,17 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
             
         
         var searchTasks = shinglesToSearch
-            .Select(shingle => _googleSearchClient.FindFirstMatchUrlAsync(shingle))
+            .Select(async shingle =>
+            {
+                try
+                {
+                    return await _googleSearchClient.FindFirstMatchUrlAsync(shingle);
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            })
             .ToList();
 
         var foundUrls = await Task.WhenAll(searchTasks);
