@@ -43,9 +43,11 @@ public class PlagiarismDetectorServiceTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task DetectAsync_WithNullOrEmptyText_ShouldThrowArgumentException(string text)
+    public async Task DetectAsync_WithNullOrEmptyText_ShouldThrowArgumentException(string? text)
     {
+        #pragma warning disable CS8604
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => _detector.DetectAsync(text, 5, 1));
+        #pragma warning restore CS8604
         Assert.Equal("text", ex.ParamName);
     }
 

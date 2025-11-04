@@ -78,9 +78,11 @@ public class TextAnalyzerTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void ExtractShingles_WithNullOrEmptyText_ShouldReturnEmptyResult(string text)
+    public void ExtractShingles_WithNullOrEmptyText_ShouldReturnEmptyResult(string? text)
     {
+        #pragma warning disable CS8604
         var result = TextAnalyzer.ExtractShingles(text, 2);
+        #pragma warning restore CS8604
         Assert.NotNull(result);
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Counts);
