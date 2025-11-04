@@ -39,7 +39,7 @@ app.MapPost("/text/analyze", ([FromBody] AnalyzeTextRequest req, ITextService sv
             if (string.IsNullOrWhiteSpace(req.Text))
                 return Results.BadRequest(new { error = "Text is required" });
 
-            var stats = svc.Analyze(req.Text);
+            var stats = svc.Analyze(req.Text, req.q);
 
             
             var counts = stats.Counts.ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -65,9 +65,11 @@ app.MapPost("/text/shingles", ([FromBody] ExtractShinglesRequest req, IShingleSe
     {
         try
         {
-            var stats = svc.Extract(req.Text, req.K);
+            var stats = svc.Extract(req.Text, req.K, req.q);
             var counts = stats.Counts.ToDictionary(kv => kv.Key, kv => kv.Value);
             var freqs = stats.Frequencies.ToDictionary(kv => kv.Key, kv => kv.Value);
+            
+              
 
             return Results.Ok(new ExtractShinglesResponse(stats.Total, counts, freqs));
         }
@@ -98,7 +100,8 @@ app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService
 
         if (file is null)
             return Results.BadRequest(new { error = "File is required" });
-
+        if (!int.TryParse(form["q"], out var q))
+            return Results.BadRequest(new { error = "A valid 'q' parameter is required." });
         switch (file.Length)
         {
             case 0:
@@ -110,7 +113,7 @@ app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService
                 {
                     await using var stream = file.OpenReadStream();
 
-                    var stats = await svc.Execute(stream, file.FileName);
+                    var stats = await svc.Execute(stream, file.FileName, q);
 
                     var counts = stats.Counts.ToDictionary(kv => kv.Key, kv => kv.Value);
                     var freqs = stats.Frequencies.ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -155,7 +158,10 @@ app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileServic
         {
             return Results.BadRequest(new { error = "A valid 'k' parameter is required." });
         }
-        
+        if (!int.TryParse(form["q"], out var q) || q <= 0)
+        {
+            return Results.BadRequest(new { error = "A valid 'k' parameter is required." });
+        }
         if (file.Length is 0 or > maxFileSize)
             return Results.Problem(detail: $"Invalid file size. Max: {maxFileSize} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
 
@@ -163,7 +169,7 @@ app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileServic
         {
             await using var stream = file.OpenReadStream();
             
-            var stats = await svc.ExecuteShingleAnalysis(stream, file.FileName, k);
+            var stats = await svc.ExecuteShingleAnalysis(stream, file.FileName, k, q);
             
             var counts = stats.Counts.ToDictionary(kv => kv.Key, kv => kv.Value);
             var freqs = stats.Frequencies.ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -189,7 +195,7 @@ app.MapPost("/plagiarism/detect", async ([FromBody] DetectPlagiarismRequest req,
         
         try
         {
-            var result = await svc.DetectAsync(req.Text, req.ShingleSize, req.SampleStep);
+            var result = await svc.DetectAsync(req.Text, req.ShingleSize, req.SampleStep, req.q);
         
             var responseDto = new DetectPlagiarismResponse(
                 result.Score,
@@ -233,7 +239,8 @@ app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeF
 
         if (file.Length is 0 or > maxFileSize)
             return Results.Problem(detail: $"Invalid file size. Max: {maxFileSize} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
-        
+        if (!int.TryParse(form["q"], out var q))
+            return Results.BadRequest(new { error = "A valid 'q' parameter is required." });
 
         try
         {
@@ -241,7 +248,7 @@ app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeF
             
             var textContent = await fileSvc.ReadAndValidateFileContentAsync(stream, file.FileName);
             
-            var result = await plagiarismSvc.DetectAsync(textContent, shingleSize, sampleStep);
+            var result = await plagiarismSvc.DetectAsync(textContent, shingleSize, sampleStep, q);
             
             var responseDto = new DetectPlagiarismResponse(
                 result.Score,
@@ -284,7 +291,8 @@ app.MapPost("/files/compare", async (HttpRequest httpRequest, IAnalyzeFileServic
 
     if (!int.TryParse(form["shingleSize"], out var shingleSize) || shingleSize <= 0)
         return Results.BadRequest(new { error = "A valid 'shingleSize' parameter is required." });
-
+    if (!int.TryParse(form["q"], out var q) || q <= 0)
+        return Results.BadRequest(new { error = "A valid 'q' parameter is required." });
     if (file1.Length is 0 || file2.Length is 0)
         return Results.BadRequest(new { error = "Files cannot be empty." });
 
@@ -298,7 +306,7 @@ app.MapPost("/files/compare", async (HttpRequest httpRequest, IAnalyzeFileServic
         await using var stream1 = file1.OpenReadStream();
         await using var stream2 = file2.OpenReadStream();
 
-        var result = await fileSvc.CompareTwoFilesAsync(stream1, file1.FileName, stream2, file2.FileName, shingleSize);
+        var result = await fileSvc.CompareTwoFilesAsync(stream1, file1.FileName, stream2, file2.FileName, shingleSize, q);
 
         var responseDto = new FileComparisonResult(
             result.SimilarityPercentage,

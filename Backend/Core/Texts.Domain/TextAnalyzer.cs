@@ -4,11 +4,11 @@ namespace Texts.Domain;
 
 public static class TextAnalyzer
 {
-    public static string[] Tokenize(string? text)
+    public static string[] Tokenize(string? text,int q)
     {
         if (string.IsNullOrWhiteSpace(text))
             return Array.Empty<string>();
-        
+
         var cleaned = new string(
             text
                 .Normalize(NormalizationForm.FormC)
@@ -18,14 +18,23 @@ public static class TextAnalyzer
                         : char.ToLowerInvariant(c))
                 .ToArray()
         );
+        var array = cleaned.Split();
+        var result = new List<string>(array.Length);
+        foreach(var word in array)
+          {
+            if (word.Length > q)
+                result.Add(word);
 
-        return cleaned
-            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+
+          }
+        
+        return result.ToArray();
     }
     
-    public static TextStats Analyze(string? text)
+    public static TextStats Analyze(string? text,int q)
     {
-        var words = Tokenize(text);
+        var words = Tokenize(text,q);
 
         var total = words.Length;
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -55,9 +64,9 @@ public static class TextAnalyzer
         };
     }
     
-    public static ShingleAnalyzer ExtractShingles(string text, int k)
+    public static ShingleAnalyzer ExtractShingles(string text, int k,int q)
     {
-        var words = Tokenize(text);
+        var words = Tokenize(text,q);
 
         if (k <= 0 || words.Length < k)
             return new ShingleAnalyzer(); 

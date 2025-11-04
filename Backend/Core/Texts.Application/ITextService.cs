@@ -4,5 +4,5 @@ namespace Texts.Application;
 
 public interface ITextService
 {
-    TextStats Analyze(string? text);
+    TextStats Analyze(string? text, int q);
 }

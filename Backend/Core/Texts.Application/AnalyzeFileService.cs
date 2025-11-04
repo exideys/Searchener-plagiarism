@@ -20,16 +20,16 @@ public sealed class AnalyzeFileService : IAnalyzeFileService
         _allowedExtensions = configuration.GetSection("AllowedFileExtensions").Get<string[]>() ?? new[] { ".txt", ".log" };
     }
 
-    public async Task<TextStats> Execute(Stream fileStream, string fileName)
+    public async Task<TextStats> Execute(Stream fileStream, string fileName, int q)
     {
         var content = await ReadAndValidateFileContentAsync(fileStream, fileName);
-        return _textService.Analyze(content);
+        return _textService.Analyze(content, q);
     }
 
-    public async Task<ShingleAnalyzer> ExecuteShingleAnalysis(Stream fileStream, string fileName, int k)
+    public async Task<ShingleAnalyzer> ExecuteShingleAnalysis(Stream fileStream, string fileName, int k, int q)
     {
         var content = await ReadAndValidateFileContentAsync(fileStream, fileName);
-        return _shingleService.Extract(content, k);
+        return _shingleService.Extract(content, k, q);
     }
     
     public async Task<string> ReadAndValidateFileContentAsync(Stream fileStream, string fileName)
@@ -56,11 +56,11 @@ public sealed class AnalyzeFileService : IAnalyzeFileService
             throw new ArgumentException($"Unsupported file extension '{ext}'. Allowed: {string.Join(", ", _allowedExtensions)}");
     }
 
-    public async Task<FileComparisonResult> CompareTwoFilesAsync(Stream fileStream1, string fileName1, Stream fileStream2, string fileName2, int shingleSize)
+    public async Task<FileComparisonResult> CompareTwoFilesAsync(Stream fileStream1, string fileName1, Stream fileStream2, string fileName2, int shingleSize, int q)
     {
         var content1 = await ReadAndValidateFileContentAsync(fileStream1, fileName1);
         var content2 = await ReadAndValidateFileContentAsync(fileStream2, fileName2);
 
-        return await _fileComparerService.CompareAsync(content1, content2, shingleSize);
+        return await _fileComparerService.CompareAsync(content1, content2, shingleSize, q);
     }
 }

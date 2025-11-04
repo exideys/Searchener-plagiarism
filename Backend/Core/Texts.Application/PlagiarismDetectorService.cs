@@ -15,7 +15,7 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
         _googleSearchClient = googleSearchClient;
     }
 
-    public async Task<PlagiarismResult> DetectAsync(string text, int shingleSize, int sampleStep)
+    public async Task<PlagiarismResult> DetectAsync(string text, int shingleSize, int sampleStep, int q)
     {
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("Text cannot be null or empty.", nameof(text));
@@ -23,7 +23,7 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
             throw new ArgumentException("Shingle size must be greater than 0.", nameof(shingleSize));
         if (sampleStep <= 0)
             throw new ArgumentException("Sample step must be greater than 0.", nameof(sampleStep));
-        var shingleAnalysis = _shingleService.Extract(text, shingleSize);
+        var shingleAnalysis = _shingleService.Extract(text, shingleSize, q);
         var uniqueShingles = shingleAnalysis.Counts.Keys.ToArray();
 
         if (uniqueShingles.Length == 0)

@@ -12,10 +12,10 @@ public class FileComparerService : IFileComparerService
     }
 
 
-public async Task<FileComparisonResult> CompareAsync(string text1, string text2, int shingleSize)
+public async Task<FileComparisonResult> CompareAsync(string text1, string text2, int shingleSize, int q)
 {
-    var shingleAnalysis1 = _shingleService.Extract(text1, shingleSize);
-    var shingleAnalysis2 = _shingleService.Extract(text2, shingleSize);
+    var shingleAnalysis1 = _shingleService.Extract(text1, shingleSize, q);
+    var shingleAnalysis2 = _shingleService.Extract(text2, shingleSize, q);
 
     var shingles1 = shingleAnalysis1.Counts.Keys;
     var shingles2 = shingleAnalysis2.Counts.Keys;

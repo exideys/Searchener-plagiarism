@@ -1,6 +1,6 @@
 namespace Texts.Contracts;
 
-public sealed record AnalyzeTextRequest(string Text);
+public sealed record AnalyzeTextRequest(string Text, int q);
 
 public sealed record AnalyzeTextResponse(
     int Total,
@@ -8,7 +8,7 @@ public sealed record AnalyzeTextResponse(
     Dictionary<string, double> Frequencies
 );
 
-public sealed record ExtractShinglesRequest(string Text, int K);
+public sealed record ExtractShinglesRequest(string Text, int K,int q);
 
 public sealed record ExtractShinglesResponse(
     int Total,
@@ -16,7 +16,7 @@ public sealed record ExtractShinglesResponse(
     Dictionary<string, double> Frequencies
 );
 
-public sealed record DetectPlagiarismRequest(string Text, int ShingleSize, int SampleStep);
+public sealed record DetectPlagiarismRequest(string Text, int ShingleSize, int SampleStep, int q);
 
 public sealed record DetectPlagiarismResponse(double Score, List<SourceMatchDto> PotentialSources);
 

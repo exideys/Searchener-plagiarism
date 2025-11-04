@@ -4,5 +4,5 @@ namespace Texts.Application;
 
 public interface IPlagiarismDetectorService
 {
-    Task<PlagiarismResult> DetectAsync(string text, int shingleSize, int sampleStep);
+    Task<PlagiarismResult> DetectAsync(string text, int shingleSize, int sampleStep, int q);
 }
