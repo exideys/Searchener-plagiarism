@@ -46,6 +46,7 @@ export default function App() {
   const [fileMode, setFileMode] = useState<FileMode>("words");
 
   const [k, setK] = useState<number>(3);
+  const [q, setQ] = useState<number>(3);
 
   const runTextAnalyze = async () => {
     const value = text.trim();
@@ -65,7 +66,7 @@ export default function App() {
     try {
       const ctrl = new AbortController();
 
-      const stats = await analyzeText(value, textMode, k, ctrl.signal);
+      const stats = await analyzeText(value, textMode, k, q, ctrl.signal);
       setTextResult(stats);
 
       const plag = await detectPlagiarismText(value, ctrl.signal);
@@ -100,7 +101,7 @@ export default function App() {
           throw new Error("Shingles comparison mode requires exactly 2 files.");
         }
 
-        const result = await compareFilesShingles(pendingFiles, k, ctrl.signal);
+        const result = await compareFilesShingles(pendingFiles, k, q);
         setFileComparison(result);
         setComparedFiles([pendingFiles[0].name, pendingFiles[1].name]);
       } else {
@@ -251,7 +252,20 @@ export default function App() {
                       setK(!Number.isNaN(v) && v > 0 ? v : 1);
                     }}
                   />
+                  Word size q
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-16 border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={q}
+                    disabled={loading !== null}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      setQ(!Number.isNaN(v) && v > 0 ? v : 1);
+                    }}
+                  />
                 </label>
+                
               )}
 
               {fileMode === "shingles-compare" && (

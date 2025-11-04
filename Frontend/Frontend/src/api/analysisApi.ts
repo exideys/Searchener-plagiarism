@@ -157,6 +157,7 @@ export async function analyzeText(
   text: string,
   mode: "words" | "shingles",
   k: number,
+  q: number,
   signal?: AbortSignal
 ): Promise<AnalyzeResponse> {
   if (!API_BASE_URL) {
@@ -390,7 +391,8 @@ export async function detectPlagiarismFiles(
 export async function compareFilesShingles(
   files: File[],
   shingleSize: number,
-  signal?: AbortSignal
+  q:number,
+
 ): Promise<FileComparisonResult> {
   if (!API_BASE_URL) {
     throw new Error("VITE_API_URL is not set (.env).");
@@ -404,13 +406,14 @@ export async function compareFilesShingles(
   fdCompare.append("files", files[0], files[0].name);
   fdCompare.append("files", files[1], files[1].name);
   fdCompare.append("shingleSize", String(shingleSize));
-
+  fdCompare.append("q", q.toString());
+  fdCompare.append("k", q.toString());
   const resCompare = await fetch(
     `${API_BASE_URL.replace(/\/$/, "")}${FILES_COMPARE_ENDPOINT}`,
     {
       method: "POST",
       body: fdCompare,
-      signal,
+      
     }
   );
 
@@ -424,8 +427,8 @@ export async function compareFilesShingles(
     throw new Error("Unexpected compare API response shape");
   }
 
-  const stats1 = await analyzeSingleFileShingles(files[0], shingleSize, signal);
-  const stats2 = await analyzeSingleFileShingles(files[1], shingleSize, signal);
+  const stats1 = await analyzeSingleFileShingles(files[0], shingleSize);
+  const stats2 = await analyzeSingleFileShingles(files[1], shingleSize);
 
   const counts1 = stats1.counts;
   const counts2 = stats2.counts;
