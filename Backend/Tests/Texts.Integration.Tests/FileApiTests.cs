@@ -5,7 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
-using FluentAssertions;
+
 using Texts.Contracts;
 
 namespace Texts.Api.Tests;
@@ -28,12 +28,13 @@ public class FileApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var response = await _client.PostAsync("/file/analyze", form);
         
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<AnalyzeTextResponse>();
 
-        dto.Should().NotBeNull();
-        dto!.Total.Should().Be(3);
-        dto.Counts.Should().ContainKey("a").WhoseValue.Should().Be(2);
+        Assert.NotNull(dto);
+        Assert.Equal(3, dto.Total);
+        Assert.True(dto.Counts.ContainsKey("a"));
+        Assert.Equal(2, dto.Counts["a"]);
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class FileApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         var response = await _client.PostAsync("/file/analyze", form);
 
-        response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
     
     [Fact]
@@ -62,16 +63,16 @@ public class FileApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var response = await _client.PostAsync("/files/compare", form);
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<FileComparisonResult>();
 
-        dto.Should().NotBeNull();
-        dto!.SimilarityPercentage.Should().BeApproximately(0.25, 0.01);
-        dto.TotalCommonShingles.Should().Be(1);
-        dto.TotalFirstTextShingles.Should().Be(2);
-        dto.TotalSecondTextShingles.Should().Be(3);
-        dto.CommonShingles.Should().HaveCount(1);
-        dto.CommonShingles[0].MatchedShingle.Should().Be("one two three");
+        Assert.NotNull(dto);
+        Assert.InRange(dto.SimilarityPercentage, 0.24, 0.26);
+        Assert.Equal(1, dto.TotalCommonShingles);
+        Assert.Equal(2, dto.TotalFirstTextShingles);
+        Assert.Equal(3, dto.TotalSecondTextShingles);
+        Assert.Single(dto.CommonShingles);
+        Assert.Equal("one two three", dto.CommonShingles[0].MatchedShingle);
     }
     
     [Fact]
@@ -83,6 +84,6 @@ public class FileApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var response = await _client.PostAsync("/files/compare", form);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

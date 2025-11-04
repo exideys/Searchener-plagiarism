@@ -187,14 +187,21 @@ app.MapPost("/plagiarism/detect", async ([FromBody] DetectPlagiarismRequest req,
         if (string.IsNullOrWhiteSpace(req.Text))
             return Results.BadRequest(new { error = "Text is required" });
         
-        var result = await svc.DetectAsync(req.Text, req.ShingleSize, req.SampleStep);
+        try
+        {
+            var result = await svc.DetectAsync(req.Text, req.ShingleSize, req.SampleStep);
         
-        var responseDto = new DetectPlagiarismResponse(
-            result.Score,
-            result.PotentialSources.Select(s => new SourceMatchDto(s.MatchedShingles, s.Url)).ToList()
-        );
+            var responseDto = new DetectPlagiarismResponse(
+                result.Score,
+                result.PotentialSources.Select(s => new SourceMatchDto(s.MatchedShingles, s.Url)).ToList()
+            );
 
-        return Results.Ok(responseDto);
+            return Results.Ok(responseDto);
+        }
+        catch (Exception e)
+        {
+            return Results.Problem(e.Message);
+        }
     })
     .WithName("DetectPlagiarism")
     .Produces<DetectPlagiarismResponse>(StatusCodes.Status200OK)
@@ -218,14 +225,14 @@ app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeF
         if (file is null)
             return Results.BadRequest(new { error = "File is required" });
 
-        if (file.Length is 0 or > maxFileSize)
-            return Results.Problem(detail: $"Invalid file size. Max: {maxFileSize} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
-        
         if (!int.TryParse(form["shingleSize"], out var shingleSize) || shingleSize <= 0)
             return Results.BadRequest(new { error = "A valid 'shingleSize' parameter is required." });
         
         if (!int.TryParse(form["sampleStep"], out var sampleStep))
             return Results.BadRequest(new { error = "A valid 'sampleStep' parameter is required." });
+
+        if (file.Length is 0 or > maxFileSize)
+            return Results.Problem(detail: $"Invalid file size. Max: {maxFileSize} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
         
 
         try
@@ -275,13 +282,17 @@ app.MapPost("/files/compare", async (HttpRequest httpRequest, IAnalyzeFileServic
     var file1 = files[0];
     var file2 = files[1];
 
-    if (file1.Length is 0 or > maxFileSize || file2.Length is 0 or > maxFileSize)
+    if (!int.TryParse(form["shingleSize"], out var shingleSize) || shingleSize <= 0)
+        return Results.BadRequest(new { error = "A valid 'shingleSize' parameter is required." });
+
+    if (file1.Length is 0 || file2.Length is 0)
+        return Results.BadRequest(new { error = "Files cannot be empty." });
+
+    if (file1.Length > maxFileSize || file2.Length > maxFileSize)
         return Results.Problem(
             detail: $"Invalid file size. Max: {maxFileSize} bytes.",
             statusCode: StatusCodes.Status413PayloadTooLarge
         );
-    if (!int.TryParse(form["shingleSize"], out var shingleSize) || shingleSize <= 0)
-        return Results.BadRequest(new { error = "A valid 'shingleSize' parameter is required." });
     try
     {
         await using var stream1 = file1.OpenReadStream();

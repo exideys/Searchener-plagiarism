@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
-    <PackageReference Include="FluentAssertions" Version="8.8.0" />
+
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
@@ -26,6 +26,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Presentation\Texts.Api\Texts.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings.Integration.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

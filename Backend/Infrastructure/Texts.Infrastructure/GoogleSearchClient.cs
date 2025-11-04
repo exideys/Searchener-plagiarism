@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -8,20 +9,27 @@ public class GoogleSearchClient : IGoogleSearchClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<GoogleSearchClient> _logger;
+    private readonly IMemoryCache _cache;
     private readonly string _apiKey;
     private readonly string _searchEngineId;
 
-    public GoogleSearchClient(HttpClient httpClient, IConfiguration configuration, ILogger<GoogleSearchClient> logger)
+    public GoogleSearchClient(HttpClient httpClient, IConfiguration configuration, ILogger<GoogleSearchClient> logger, IMemoryCache cache)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _cache = cache;
         _apiKey = configuration["GoogleSearch:ApiKey"]!;
         _searchEngineId = configuration["GoogleSearch:SearchEngineId"]!;
     }
 
     public async Task<string?> FindFirstMatchUrlAsync(string exactPhrase)
     {
-        var query = $"\"{exactPhrase}\""; 
+        if (_cache.TryGetValue(exactPhrase, out string? cachedUrl))
+        {
+            return cachedUrl;
+        }
+        
+        var query = $"{exactPhrase}"; 
         var requestUri = $"?key={_apiKey}&cx={_searchEngineId}&q={Uri.EscapeDataString(query)}";
 
         try
@@ -35,7 +43,14 @@ public class GoogleSearchClient : IGoogleSearchClient
             }
 
             var result = await response.Content.ReadFromJsonAsync<GoogleSearchResult>();
-            return result?.Items?.FirstOrDefault()?.Link;
+            var url = result?.Items?.FirstOrDefault()?.Link;
+            
+            if (url is not null)
+            {
+                _cache.Set(exactPhrase, url, TimeSpan.FromDays(1));
+            }
+            
+            return url;
         }
         catch (Exception ex)
         {

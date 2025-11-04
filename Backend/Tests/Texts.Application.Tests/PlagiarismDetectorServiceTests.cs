@@ -39,6 +39,18 @@ public class PlagiarismDetectorServiceTests
         Assert.Equal("sampleStep", ex.ParamName);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task DetectAsync_WithNullOrEmptyText_ShouldThrowArgumentException(string? text)
+    {
+        #pragma warning disable CS8604
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _detector.DetectAsync(text, 5, 1));
+        #pragma warning restore CS8604
+        Assert.Equal("text", ex.ParamName);
+    }
+
     [Fact]
     public async Task DetectAsync_WhenNoShinglesAreExtracted_ShouldReturnZeroScore()
     {
@@ -49,6 +61,21 @@ public class PlagiarismDetectorServiceTests
         
         Assert.Equal(0, result.Score);
         Assert.Empty(result.PotentialSources);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WhenTextIsTooShortForShingleCreation_ShouldReturnZeroScore()
+    {
+        var shortText = "short";
+        var shingleSize = 10;
+        _shingleServiceMock.Setup(s => s.Extract(shortText, shingleSize))
+            .Returns(new ShingleAnalyzer());
+
+        var result = await _detector.DetectAsync(shortText, shingleSize, 1);
+
+        Assert.Equal(0, result.Score);
+        Assert.Empty(result.PotentialSources);
+        _shingleServiceMock.Verify(s => s.Extract(shortText, shingleSize), Times.Once);
     }
 
     [Fact]
@@ -105,6 +132,33 @@ public class PlagiarismDetectorServiceTests
         Assert.Single(sourceB.MatchedShingles);
         Assert.Contains("shingle b", sourceB.MatchedShingles);
     }
+    
+    [Fact]
+    public async Task DetectAsync_WhenNoShinglesAreSampled_ShouldReturnZeroScore()
+    {
+        var uniqueShingles = new List<string> { "shingle a", "shingle b", "shingle c", "shingle d" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+        
+        var result = await _detector.DetectAsync("a short text", 5, 10);
+        
+        Assert.Equal(0, result.Score);
+        Assert.Empty(result.PotentialSources);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WhenShinglesToSearchIsEmptyDueToLargeSampleStep_ShouldReturnZeroScore()
+    {
+        var uniqueShingles = new List<string> { "shingle a", "shingle b", "shingle c" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+
+        var result = await _detector.DetectAsync("some text", 1, 10); 
+
+        Assert.Equal(0, result.Score);
+        Assert.Empty(result.PotentialSources);
+    }
+
 
     private static ShingleAnalyzer CreateShingleAnalyzerFromList(List<string> shingles)
     {
@@ -114,5 +168,96 @@ public class PlagiarismDetectorServiceTests
             Counts = shingles.ToDictionary(s => s, s => 1),
             Frequencies = shingles.ToDictionary(s => s, s => 1.0 / shingles.Count)
         };
+    }
+    
+    [Fact]
+    public async Task DetectAsync_WhenGoogleSearchClientThrowsException_ShouldHandleGracefully()
+    {
+        var uniqueShingles = new List<string> { "shingle a", "shingle b" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("shingle a")).ReturnsAsync("http://found.com");
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("shingle b")).ThrowsAsync(new Exception("Google search failed"));
+
+        var result = await _detector.DetectAsync("some text", 1, 1);
+
+        Assert.Equal(0.5, result.Score);
+        Assert.Single(result.PotentialSources);
+        Assert.Equal("http://found.com", result.PotentialSources.First().Url);
+        Assert.Single(result.PotentialSources.First().MatchedShingles);
+        Assert.Contains("shingle a", result.PotentialSources.First().MatchedShingles);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WhenShinglesAreSampledButNoMatchesFound_ShouldReturnZeroScore()
+    {
+        var uniqueShingles = new List<string> { "shingle a", "shingle b", "shingle c" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync(It.IsAny<string>())).ReturnsAsync((string?)null);
+
+        var result = await _detector.DetectAsync("some text", 1, 1);
+
+        Assert.Equal(0, result.Score);
+        Assert.Empty(result.PotentialSources);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WhenFewShinglesToSearch_ShouldProcessCorrectly()
+    {
+        var uniqueShingles = new List<string> { "shingle a", "shingle b" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("shingle a")).ReturnsAsync("http://found.com/a");
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("shingle b")).ReturnsAsync((string?)null);
+
+        var result = await _detector.DetectAsync("some text with few shingles", 1, 1);
+
+        Assert.Equal(0.5, result.Score);
+        Assert.Single(result.PotentialSources);
+        Assert.Equal("http://found.com/a", result.PotentialSources.First().Url);
+        Assert.Single(result.PotentialSources.First().MatchedShingles);
+        Assert.Contains("shingle a", result.PotentialSources.First().MatchedShingles);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WithLessShinglesThanMax_ShouldProcessCorrectly()
+    {
+        var uniqueShingles = new List<string> { "shingle a", "shingle b" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("shingle a")).ReturnsAsync("http://found.com/a");
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("shingle b")).ReturnsAsync((string?)null);
+
+        var result = await _detector.DetectAsync("some text with few shingles", 1, 1);
+
+        Assert.Equal(0.5, result.Score);
+        Assert.Single(result.PotentialSources);
+        Assert.Equal("http://found.com/a", result.PotentialSources.First().Url);
+        Assert.Single(result.PotentialSources.First().MatchedShingles);
+        Assert.Contains("shingle a", result.PotentialSources.First().MatchedShingles);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WithSmallNumberOfUniqueShingles_ShouldProcessCorrectly()
+    {
+        var uniqueShingles = new List<string> { "short text one", "short text two" };
+        var shingleStats = CreateShingleAnalyzerFromList(uniqueShingles);
+        _shingleServiceMock.Setup(s => s.Extract(It.IsAny<string>(), It.IsAny<int>())).Returns(shingleStats);
+
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("short text one")).ReturnsAsync("http://found.com/one");
+        _googleSearchClientMock.Setup(g => g.FindFirstMatchUrlAsync("short text two")).ReturnsAsync((string?)null);
+
+        var result = await _detector.DetectAsync("a very short text", 1, 1);
+
+        Assert.Equal(0.5, result.Score);
+        Assert.Single(result.PotentialSources);
+        Assert.Equal("http://found.com/one", result.PotentialSources.First().Url);
+        Assert.Single(result.PotentialSources.First().MatchedShingles);
+        Assert.Contains("short text one", result.PotentialSources.First().MatchedShingles);
     }
 }

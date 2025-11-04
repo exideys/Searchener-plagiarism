@@ -4,6 +4,7 @@ public class PlagiarismResult
 {
     public double Score { get; set; } 
     public List<SourceMatch> PotentialSources { get; set; } = new();
+    public string? ErrorMessage { get; set; }
 }
 
 public class SourceMatch

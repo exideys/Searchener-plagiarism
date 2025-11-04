@@ -16,6 +16,15 @@ public class TextAnalyzerTests
     }
 
     [Fact]
+    public void Analyze_WithNullString_ShouldReturnEmptyStats()
+    {
+        var stats = TextAnalyzer.Analyze(null);
+        Assert.Equal(0, stats.Total);
+        Assert.Empty(stats.Counts);
+        Assert.Empty(stats.Frequencies);
+    }
+
+    [Fact]
     public void Analyze_WithExtraSpaces_ShouldBeIgnored()
     {
         var stats = TextAnalyzer.Analyze("ab   a   a");
@@ -64,4 +73,21 @@ public class TextAnalyzerTests
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Counts);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ExtractShingles_WithNullOrEmptyText_ShouldReturnEmptyResult(string? text)
+    {
+        #pragma warning disable CS8604
+        var result = TextAnalyzer.ExtractShingles(text, 2);
+        #pragma warning restore CS8604
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Total);
+        Assert.Empty(result.Counts);
+        Assert.Empty(result.Frequencies);
+    }
+
+
 }
