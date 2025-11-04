@@ -335,7 +335,6 @@ export default function App() {
           <FilePlagiarismBlock results={filePlagiarism} />
         )}
 
-        {/* блок сравнения шинглов по образцу из методички */}
         {!loading && fileComparison && (
           <div className="bg-white border rounded-2xl p-4 shadow-sm grid gap-3">
             <div className="flex items-center justify-between gap-2">
@@ -410,7 +409,7 @@ export default function App() {
                       );
                     })}
 
-                    {/* строка Σ как в примере */}
+
                     <tr className="bg-gray-100 font-semibold border-t">
                       <td className="px-3 py-1.5">Σ</td>
                       <td className="px-3 py-1.5 text-right">
