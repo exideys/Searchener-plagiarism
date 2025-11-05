@@ -33,9 +33,6 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
         var shinglesToSearch = uniqueShingles
             .Where((shingle, index) => index % sampleStep == 0)
             .ToList();
-
-        //if (shinglesToSearch.Count == 0)
-        //   return new PlagiarismResult { Score = 0 };
             
         
         var searchTasks = shinglesToSearch
