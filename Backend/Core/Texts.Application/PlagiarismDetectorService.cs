@@ -5,7 +5,7 @@ namespace Texts.Application;
 
 public class PlagiarismDetectorService : IPlagiarismDetectorService
 {
-    
+
     private readonly IShingleService _shingleService;
     private readonly IGoogleSearchClient _googleSearchClient;
 
@@ -34,8 +34,8 @@ public class PlagiarismDetectorService : IPlagiarismDetectorService
             .Where((shingle, index) => index % sampleStep == 0)
             .ToList();
 
-        if (shinglesToSearch.Count == 0)
-            return new PlagiarismResult { Score = 0 };
+        //if (shinglesToSearch.Count == 0)
+        //   return new PlagiarismResult { Score = 0 };
             
         
         var searchTasks = shinglesToSearch

@@ -32,6 +32,4 @@ public sealed record FileComparisonResult(
 
 public sealed record MatchedShingles(string MatchedShingle, int MatchedFirstFileCount, int MatchedSecondFileCount);
 
-public sealed record FileComparisonRequest(string File1Content, string File2Content);
-
 public sealed record FileComparisonResponse(FileComparisonResult Result);
