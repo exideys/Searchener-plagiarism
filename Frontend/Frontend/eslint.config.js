@@ -6,12 +6,10 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**'],
+    ignores: ['dist/**', 'node_modules/**'],
   },
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
@@ -21,13 +19,18 @@ export default tseslint.config(
       'react-refresh/only-export-components': 'warn',
     },
     languageOptions: {
-      globals: {
-        ...globals.browser,
-      },
+      globals: { ...globals.browser },
       parserOptions: {
         project: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  }
+  },
+  {
+    files: ['**/*.{js,cjs,mjs,cts,mts,test.ts,test.tsx,config.ts}'],
+    rules: {
+    },
+  },
+  ...tseslint.configs.recommended,
+  js.configs.recommended
 );
