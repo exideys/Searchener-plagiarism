@@ -4,6 +4,35 @@ import { StatBadge } from "../components/StatBadge";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
+const HeaderBtn = ({
+  label,
+  k,
+  sortKey,
+  dir,
+  onClick,
+}: {
+  label: string;
+  k: "word" | "count" | "freq";
+  sortKey: "word" | "count" | "freq";
+  dir: "asc" | "desc";
+  onClick: (key: "word" | "count" | "freq") => void;
+}) => (
+  <button
+    className={`text-left w-full font-semibold ${
+      sortKey === k ? "text-indigo-700" : "text-gray-700"
+    }`}
+    onClick={() => onClick(k)}
+    title="Sort"
+  >
+    <span className="align-middle">{label}</span>
+    {sortKey === k && (
+      <span className="ml-1 align-middle opacity-70">
+        {dir === "asc" ? "▲" : "▼"}
+      </span>
+    )}
+  </button>
+);
+
 export function ResultsTable({
   data,
   title,
@@ -37,32 +66,14 @@ export function ResultsTable({
     });
   }, [data, sortKey, dir]);
 
-  const HeaderBtn = ({
-    label,
-    k,
-  }: {
-    label: string;
-    k: typeof sortKey;
-  }) => (
-    <button
-      className={`text-left w-full font-semibold ${
-        sortKey === k ? "text-indigo-700" : "text-gray-700"
-      }`}
-      onClick={() =>
-        sortKey === k
-          ? setDir((d) => (d === "asc" ? "desc" : "asc"))
-          : setSortKey(k)
-      }
-      title="Sort"
-    >
-      <span className="align-middle">{label}</span>
-      {sortKey === k && (
-        <span className="ml-1 align-middle opacity-70">
-          {dir === "asc" ? "▲" : "▼"}
-        </span>
-      )}
-    </button>
-  );
+  const handleSort = (k: typeof sortKey) => {
+    if (sortKey === k) {
+      setDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      setDir("desc");
+    }
+  };
 
   return (
     <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
@@ -80,13 +91,31 @@ export function ResultsTable({
           <thead className="bg-gray-50 border-y">
             <tr>
               <th className="px-4 py-3 w-[50%]">
-                <HeaderBtn label="Token / Shingle" k="word" />
+                <HeaderBtn
+                  label="Token / Shingle"
+                  k="word"
+                  sortKey={sortKey}
+                  dir={dir}
+                  onClick={handleSort}
+                />
               </th>
               <th className="px-4 py-3 w-[25%]">
-                <HeaderBtn label="Count" k="count" />
+                <HeaderBtn
+                  label="Count"
+                  k="count"
+                  sortKey={sortKey}
+                  dir={dir}
+                  onClick={handleSort}
+                />
               </th>
               <th className="px-4 py-3 w-[25%]">
-                <HeaderBtn label="Probability" k="freq" />
+                <HeaderBtn
+                  label="Probability"
+                  k="freq"
+                  sortKey={sortKey}
+                  dir={dir}
+                  onClick={handleSort}
+                />
               </th>
             </tr>
           </thead>
