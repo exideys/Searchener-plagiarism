@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import pluginReact from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
@@ -9,17 +10,32 @@ export default tseslint.config(
     ignores: ['dist/**', 'node_modules/**'],
   },
   {
+    plugins: {
+      react: pluginReact
+    },
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
+    },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
     },
     rules: {
+      ...pluginReact.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': 'warn',
     },
     languageOptions: {
-      globals: { ...globals.browser },
       parserOptions: {
         project: true,
         tsconfigRootDir: import.meta.dirname,
@@ -27,10 +43,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.{js,cjs,mjs,cts,mts,test.ts,test.tsx,config.ts}'],
+    files: ['**/*.{ts,tsx}'],
     rules: {
-    },
+      ...tseslint.configs.recommended.rules,
+    }
   },
-  ...tseslint.configs.recommended,
   js.configs.recommended
 );
