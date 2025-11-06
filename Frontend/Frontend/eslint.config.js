@@ -15,38 +15,35 @@ export default tseslint.config(
   pluginReact.configs.flat.recommended,
 
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.tsx', '**/*.spec.tsx'],
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
     },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: { ...globals.browser },
+    },
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': 'warn',
+    },
+    settings: { react: { version: 'detect' } },
+  },
+
+  {
+    files: ['**/*.{js,ts,jsx,tsx}'],
+    rules: {
       'react/react-in-jsx-scope': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-    },
-    languageOptions: {
-      parser: tseslint.parser,
-      globals: { ...globals.browser },
-    },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-    },
-  },
-
-  {
-    files: ['src/**/*.{ts,tsx}'],
-    languageOptions: {
-      parserOptions: {
-        project: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
     },
   },
 
