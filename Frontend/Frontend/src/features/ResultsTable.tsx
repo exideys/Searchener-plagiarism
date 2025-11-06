@@ -15,7 +15,7 @@ const HeaderBtn = ({
   k: "word" | "count" | "freq";
   sortKey: "word" | "count" | "freq";
   dir: "asc" | "desc";
-  onClick: (key: "word" | "count" | "freq") => void;
+  onClick: (k: "word" | "count" | "freq") => void;
 }) => (
   <button
     className={`text-left w-full font-semibold ${
@@ -150,3 +150,4 @@ export function ResultsTable({
     </div>
   );
 }
+
