@@ -12,7 +12,7 @@ export default tseslint.config(
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  pluginReact.configs.recommended,
+  pluginReact.configs.flat.recommended,
 
   {
     files: ['**/*.{ts,tsx}'],
@@ -44,7 +44,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['**/*.config.js', '**/*.config.ts', '.eslintrc.cjs'],
+    files: ['**/*.config.js', '**/*.config.ts'],
     languageOptions: {
       globals: {
         ...globals.node,
