@@ -24,17 +24,14 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': 'warn',
       'react/react-in-jsx-scope': 'off',
-      'no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
     languageOptions: {
       parser: tseslint.parser,
-      parserOptions: {
-        project: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-      globals: {
-        ...globals.browser,
-      },
+      globals: { ...globals.browser },
     },
     settings: {
       react: {
@@ -44,11 +41,19 @@ export default tseslint.config(
   },
 
   {
-    files: ['**/*.config.js', '**/*.config.ts'],
+    files: ['src/**/*.{ts,tsx}'],
     languageOptions: {
-      globals: {
-        ...globals.node,
+      parserOptions: {
+        project: true,
+        tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+
+  {
+    files: ['**/*.config.ts', '**/*.config.js'],
+    languageOptions: {
+      globals: { ...globals.node },
     },
   }
 );
