@@ -9,11 +9,29 @@ export default tseslint.config(
   {
     ignores: ['dist/**', 'node_modules/**'],
   },
+
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  pluginReact.configs.recommended,
+
   {
+    files: ['**/*.{ts,tsx}'],
     plugins: {
-      react: pluginReact
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': 'warn',
+      'react/react-in-jsx-scope': 'off',
+      'no-unused-vars': 'warn',
     },
     languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
       globals: {
         ...globals.browser,
       },
@@ -24,29 +42,13 @@ export default tseslint.config(
       },
     },
   },
+
   {
-    files: ['src/**/*.{ts,tsx}'],
-    plugins: {
-      'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
-    },
-    rules: {
-      ...pluginReact.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': 'warn',
-    },
+    files: ['**/*.config.js', '**/*.config.ts', '.eslintrc.cjs'],
     languageOptions: {
-      parserOptions: {
-        project: true,
-        tsconfigRootDir: import.meta.dirname,
+      globals: {
+        ...globals.node,
       },
     },
-  },
-  {
-    files: ['**/*.{ts,tsx}'],
-    rules: {
-      ...tseslint.configs.recommended.rules,
-    }
-  },
-  js.configs.recommended
+  }
 );
