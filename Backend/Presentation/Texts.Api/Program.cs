@@ -58,8 +58,7 @@ app.MapPost("/text/analyze", ([FromBody] AnalyzeTextRequest req, ITextService sv
     })
     .WithName("AnalyzeText")
     .Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
-    .Produces(StatusCodes.Status400BadRequest)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status400BadRequest);
 
 app.MapPost("/text/shingles", ([FromBody] ExtractShinglesRequest req, IShingleService svc) =>
     {
@@ -78,8 +77,7 @@ app.MapPost("/text/shingles", ([FromBody] ExtractShinglesRequest req, IShingleSe
     })
     .WithName("ExtractShingles")
     .Produces<ExtractShinglesResponse>(StatusCodes.Status200OK) 
-    .Produces(StatusCodes.Status400BadRequest)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status400BadRequest);
 
 
 app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService svc) =>
@@ -131,8 +129,7 @@ app.MapPost("/file/analyze", async (HttpRequest httpRequest, IAnalyzeFileService
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
-    .Produces(StatusCodes.Status413PayloadTooLarge)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status413PayloadTooLarge);
 
 app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileService svc) =>
     {
@@ -179,8 +176,7 @@ app.MapPost("/file/shingles", async (HttpRequest httpRequest, IAnalyzeFileServic
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<ExtractShinglesResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
-    .Produces(StatusCodes.Status413PayloadTooLarge)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status413PayloadTooLarge);
 
 app.MapPost("/plagiarism/detect", async ([FromBody] DetectPlagiarismRequest req, IPlagiarismDetectorService svc) =>
     {
@@ -205,8 +201,7 @@ app.MapPost("/plagiarism/detect", async ([FromBody] DetectPlagiarismRequest req,
     })
     .WithName("DetectPlagiarism")
     .Produces<DetectPlagiarismResponse>(StatusCodes.Status200OK)
-    .Produces(StatusCodes.Status400BadRequest)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status400BadRequest);
 
 app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeFileService fileSvc, IPlagiarismDetectorService plagiarismSvc) =>
     {
@@ -259,8 +254,7 @@ app.MapPost("/plagiarism/detect/file", async (HttpRequest httpRequest, IAnalyzeF
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<DetectPlagiarismResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
-    .Produces(StatusCodes.Status413PayloadTooLarge)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status413PayloadTooLarge);
 
 app.MapPost("/files/compare", async (HttpRequest httpRequest, IAnalyzeFileService fileSvc) =>
 {
@@ -319,13 +313,11 @@ app.MapPost("/files/compare", async (HttpRequest httpRequest, IAnalyzeFileServic
     .Accepts<IFormFile>("multipart/form-data")
     .Produces<FileComparisonResult>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
-    .Produces(StatusCodes.Status413PayloadTooLarge)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status413PayloadTooLarge);
 
 app.MapPost("/health", () => Results.Ok(new { status = "Healthy" }))
     .WithName("HealthCheck")
-    .Produces(StatusCodes.Status200OK)
-    .WithOpenApi();
+    .Produces(StatusCodes.Status200OK);
 
 app.Run();
 
